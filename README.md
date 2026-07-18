@@ -1,10 +1,10 @@
 <div align="center">
 
-# 💰 Finances
+<img src="docs/banner.png" alt="Finances — your money, fully offline" width="100%"/>
 
-### Your entire money life — private, offline, on your phone.
+<br/><br/>
 
-An offline-first personal finance app: track spending, budgets, investments, gold & loans, lending, and your whole net worth — with **zero accounts, zero cloud, zero tracking.** Everything lives in your phone's local storage.
+An offline-first personal finance app: track spending, budgets, investments, gold &amp; loans, lending, and your whole net worth — with **zero accounts, zero cloud, zero tracking.** Everything lives in your phone's local storage.
 
 <br/>
 
@@ -28,14 +28,14 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="src/assets/tour/home.jpg" width="200"/><br/><b>Home</b><br/><sub>Spend · budget · portfolio</sub></td>
-    <td align="center"><img src="src/assets/tour/money.jpg" width="200"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
-    <td align="center"><img src="src/assets/tour/portfolio.jpg" width="200"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
+    <td align="center"><img src="docs/frames/home.png" width="215"/><br/><b>Home</b><br/><sub>Spend · budget · portfolio</sub></td>
+    <td align="center"><img src="docs/frames/money.png" width="215"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
+    <td align="center"><img src="docs/frames/portfolio.png" width="215"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="src/assets/tour/breakdown.jpg" width="200"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
-    <td align="center"><img src="src/assets/tour/trends.jpg" width="200"/><br/><b>Trends</b><br/><sub>Category, month over month</sub></td>
-    <td align="center"><img src="src/assets/tour/udhaar.jpg" width="200"/><br/><b>Udhaar</b><br/><sub>Who owes you & you owe</sub></td>
+    <td align="center"><img src="docs/frames/breakdown.png" width="215"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
+    <td align="center"><img src="docs/frames/trends.png" width="215"/><br/><b>Trends</b><br/><sub>Category, month over month</sub></td>
+    <td align="center"><img src="docs/frames/udhaar.png" width="215"/><br/><b>Udhaar</b><br/><sub>Who owes you & you owe</sub></td>
   </tr>
 </table>
 </div>
