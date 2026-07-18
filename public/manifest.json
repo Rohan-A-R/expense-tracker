@@ -1,7 +1,7 @@
 {
-  "name": "Expense Tracker",
-  "short_name": "Expenses",
-  "description": "Personal expense tracking app - offline first",
+  "name": "Finances",
+  "short_name": "Finances",
+  "description": "Your entire money life — private, offline, on your phone.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F0E4",

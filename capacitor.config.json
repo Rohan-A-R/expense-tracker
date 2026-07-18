@@ -1,6 +1,6 @@
 {
   "appId": "com.personal.expensetracker",
-  "appName": "Expense Tracker",
+  "appName": "Finances",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
