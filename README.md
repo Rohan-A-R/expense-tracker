@@ -1,177 +1,167 @@
-# Expense Tracker — Offline-First Android App
+<div align="center">
 
-A fully private, offline-first personal expense tracking app built with React + Vite + TailwindCSS + Capacitor. All data is stored locally on your device using IndexedDB — no backend, no cloud, no accounts required.
+# 💰 Finances
 
-## Features
+### Your entire money life — private, offline, on your phone.
 
-- **Dashboard**: Monthly total, weekly spending, daily average, budget remaining, recent transactions
-- **Expense Management**: Add, edit, delete expenses with category, date, note, payment type
-- **Analytics**: Pie charts, monthly bar chart, daily trend area chart, percentage breakdown
-- **Smart Insights**: Auto-generated spending insights and saving suggestions
-- **Budget**: Set monthly and per-category budgets with visual progress bars
-- **Search & Filter**: Filter by category, month, search notes, sort by date/amount
-- **Categories**: 14 default categories + create/edit/delete your own with custom icon & color
-- **Backup & Export**: Export to JSON (full backup) or CSV, import backup files
-- **Dark Mode**: Full dark mode support with toggle
-- **Offline First**: 100% offline, IndexedDB storage, no internet needed
-- **Sample Data**: Ships with May 2025 real expense data pre-loaded
+An offline-first personal finance app: track spending, budgets, investments, gold & loans, lending, and your whole net worth — with **zero accounts, zero cloud, zero tracking.** Everything lives in your phone's local storage.
 
-## Tech Stack
+<br/>
+
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![Capacitor](https://img.shields.io/badge/Capacitor-6-119EFF?style=for-the-badge&logo=capacitor&logoColor=white)
+![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
+
+![Offline](https://img.shields.io/badge/100%25-Offline-4E9E6A?style=flat-square)
+![No Backend](https://img.shields.io/badge/Backend-None-D9481C?style=flat-square)
+![Storage](https://img.shields.io/badge/Storage-IndexedDB-C9972E?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-1B1710?style=flat-square)
+
+</div>
+
+---
+
+## 📱 Screens
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img src="src/assets/tour/home.jpg" width="200"/><br/><b>Home</b><br/><sub>Spend · budget · portfolio</sub></td>
+    <td align="center"><img src="src/assets/tour/money.jpg" width="200"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
+    <td align="center"><img src="src/assets/tour/portfolio.jpg" width="200"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="src/assets/tour/breakdown.jpg" width="200"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
+    <td align="center"><img src="src/assets/tour/trends.jpg" width="200"/><br/><b>Trends</b><br/><sub>Category, month over month</sub></td>
+    <td align="center"><img src="src/assets/tour/udhaar.jpg" width="200"/><br/><b>Udhaar</b><br/><sub>Who owes you & you owe</sub></td>
+  </tr>
+</table>
+</div>
+
+---
+
+## ✨ Features
+
+### 🧾 Track
+- One-tap expense logging with categories, notes, payment type
+- **Salary-day months** — your month can start on payday, not the 1st
+- Monthly & per-category **budgets** with live progress
+- Search, filter and sort your full spend history
+
+### 📊 Understand
+- **Breakdown** — category donut for any month
+- **Trends** — per-category spend across the last 5 months
+- **Monthly** — 6-month bar chart with average line
+- **Report** — safe-to-spend a day, a *this-month-vs-last* race chart, spending-calendar heatmap, category-budget alerts, and the little repeat purchases that add up
+
+### 📈 Grow
+- **Portfolio** — add stocks & mutual funds, **live prices** (Yahoo Finance + AMFI NAV), weighted-average buy price, allocation split
+- **Recurring SIPs** that auto-add units each month at that month's NAV
+- **Net worth hub** — one number for everything you own and owe, with a **stock-app-style trend chart** (1M · 6M · 1Y · 5Y · ALL)
+- **Live-valued assets**: gold / silver / platinum by weight, **auto-compounding FDs**, **amortizing loans**
+
+### 🤝 Lend & borrow
+- **Udhaar ledger** — track who owes you and who you owe, netted per person, with settle-up and history
+
+### 🔒 Secure & portable
+- **App lock** with 4-digit PIN + optional **fingerprint unlock**
+- **JSON backup & restore**, CSV export
+- **Welcome tour** with a *"try with sample data"* demo mode that auto-clears after a day
+
+### 🛡️ Private by design
+- **100% offline** — no accounts, no servers, no analytics
+- All data in **IndexedDB** on the device; the only network calls are optional market-price lookups
+
+---
+
+## 🛠️ Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 18 + Vite 5 |
-| Styling | TailwindCSS 3 |
+| Styling | TailwindCSS 3 (editorial "paper" theme) |
 | Charts | Recharts 2 |
-| Storage | IndexedDB (via `idb` library) |
-| Mobile | Capacitor 6 |
-| Build | ESBuild (via Vite) |
+| Storage | IndexedDB via [`idb`](https://github.com/jakearchibald/idb) |
+| Mobile | Capacitor 6 (Android) |
+| Market data | Yahoo Finance (stocks/metals) · mfapi.in / AMFI (MF NAV) |
+| Biometrics | `@aparajita/capacitor-biometric-auth` |
 
 ---
 
-## Quick Start (Browser / Development)
+## 🚀 Quick Start (Web / Development)
 
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Start dev server
-npm run dev
-
-# 3. Open in browser
-# http://localhost:5173
+npm install      # install dependencies
+npm run dev      # start dev server → http://localhost:5173
 ```
+
+> Stock & metal prices and fingerprint unlock are native-only (blocked by CORS / no hardware in a browser). Everything else — including mutual-fund NAV — works in the browser.
+
+## 📦 Build the Android APK
+
+**Prerequisites:** Node 18+, JDK 17+, Android SDK (API 34).
+
+```bash
+npm run build                 # 1. build the web bundle
+npx cap sync android          # 2. copy web assets + register plugins
+cd android && ./gradlew assembleDebug   # 3. build the APK
+```
+
+The APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+App ID: `com.personal.expensetracker` · Display name: **Finances**
 
 ---
 
-## Android APK Build (Step by Step)
+## 🗄️ Data Model
 
-### Prerequisites
+Everything is stored locally in IndexedDB — no data ever leaves the device.
 
-- **Node.js** 18+
-- **Java Development Kit (JDK) 17+**
-- **Android Studio** (with Android SDK)
-- **Android SDK** with API level 34
+| Store | Purpose |
+|-------|---------|
+| `expenses` | Every expense (bucketed into financial months) |
+| `categories` | Category definitions (icon + colour) |
+| `budgets` | Monthly & per-category budgets |
+| `udhaar` | Lend / borrow entries per person |
+| `holdings` | Stocks & mutual funds (+ SIP config) |
+| `assets` | Net-worth items: metals, FDs, loans, other |
+| `networth_snaps` | One daily net-worth snapshot → the trend chart |
+| `settings` | Preferences, cached prices, PIN hash, flags |
 
-### Step 1 — Install dependencies
+Financial-month logic re-buckets every expense from its date, so changing your salary day is always safe.
 
-```bash
-npm install
+---
+
+## 📁 Project Structure
+
 ```
-
-### Step 2 — Build the web app
-
-```bash
-npm run build
-```
-
-### Step 3 — Initialize Capacitor (first time only)
-
-```bash
-npx cap init "Expense Tracker" "com.personal.expensetracker" --web-dir dist
-```
-
-### Step 4 — Add Android platform (first time only)
-
-```bash
-npx cap add android
-```
-
-### Step 5 — Sync web build to Android
-
-```bash
-npx cap sync android
-```
-
-### Step 6 — Open in Android Studio
-
-```bash
-npx cap open android
-```
-
-In Android Studio:
-1. Wait for Gradle sync to complete
-2. Go to **Build → Build Bundle(s) / APK(s) → Build APK(s)**
-3. The APK will be in `android/app/build/outputs/apk/debug/app-debug.apk`
-
-### Subsequent builds (after code changes)
-
-```bash
-npm run build && npx cap sync android
-# Then build APK from Android Studio
+src/
+├── components/
+│   ├── expenses/       # expense card + form
+│   ├── insights/       # Report tab
+│   ├── layout/         # bottom nav
+│   ├── onboarding/     # welcome tour
+│   ├── security/       # PIN + biometric lock
+│   └── ui/             # modal, etc.
+├── context/AppContext.jsx   # global state + all actions
+├── pages/              # Dashboard, Expenses, Analytics, Budget,
+│                       # Settings, Portfolio, NetWorth, Udhaar
+├── services/           # db (IndexedDB), marketData, export, notifications, biometrics
+└── utils/              # formatters, report, networth, demoData, sampleData
 ```
 
 ---
 
-## Project Structure
+## 🔐 Privacy
 
-```
-expense-tracker/
-├── src/
-│   ├── components/
-│   │   ├── analytics/          # Chart components (Pie, Bar, Line)
-│   │   ├── dashboard/          # Stat cards, budget progress, recent transactions
-│   │   ├── expenses/           # Expense card, expense form
-│   │   ├── insights/           # Insight card
-│   │   ├── layout/             # Bottom nav, header
-│   │   └── ui/                 # Button, Card, Modal, Input, Badge
-│   ├── context/
-│   │   └── AppContext.jsx      # Global state + all actions
-│   ├── pages/
-│   │   ├── Dashboard.jsx       # Home screen
-│   │   ├── Expenses.jsx        # Expense list with search/filter
-│   │   ├── Analytics.jsx       # Charts + insights
-│   │   ├── Budget.jsx          # Budget management
-│   │   └── Settings.jsx        # Categories, theme, backup/export
-│   ├── services/
-│   │   ├── db.js               # IndexedDB service (idb)
-│   │   └── export.js           # JSON/CSV export, import parser
-│   └── utils/
-│       ├── formatters.js       # Currency, date, month formatters
-│       ├── insights.js         # Smart insight generation
-│       └── sampleData.js       # Default categories + May 2025 sample expenses
-├── capacitor.config.ts
-├── tailwind.config.js
-├── vite.config.js
-└── package.json
-```
+No sign-up. No backend. No telemetry. The app makes network requests **only** to fetch live investment/metal prices, and only when you hold something priced. Your expenses, budgets, balances and PIN never leave your phone.
 
 ---
 
-## Storage Architecture
+## 📄 License
 
-All data is stored in **IndexedDB** using the `idb` library with 4 object stores:
+[MIT](LICENSE) — free to use, modify and share.
 
-| Store | Key | Purpose |
-|-------|-----|---------|
-| `expenses` | autoIncrement | All expense records |
-| `categories` | autoIncrement | Category definitions |
-| `budgets` | manual (`monthly`, `cat-N`) | Monthly and per-category budgets |
-| `settings` | string key | App preferences (theme, etc.) |
-
-No data ever leaves the device. No network requests are made after initial font load.
-
----
-
-## Default Categories
-
-Outside Food, Groceries, Milk, Eggs, Fruits, Vegetables, Travel, Electricity, Rent, Zepto, Shopping, Medical, Xerox, Miscellaneous
-
----
-
-## Performance Notes
-
-- Code-split chunks: vendor (React), charts (Recharts), app code
-- Minimal re-renders using `useMemo` and `useCallback`
-- No polling or background tasks
-- IndexedDB async operations — no blocking
-- Touch events handled natively — no gesture libraries
-
----
-
-## Android Configuration Notes
-
-The `capacitor.config.ts` sets:
-- `androidScheme: 'https'` — enables secure context (required for IndexedDB on Android)
-- `backgroundColor: '#1a1a2e'` — prevents white flash on app load
-- Status bar dark style
+<div align="center"><sub>Built with Claude Code · 100% on-device</sub></div>
