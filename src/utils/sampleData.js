@@ -1,0 +1,16 @@
+export const DEFAULT_CATEGORIES = [
+  { id: 1, name: 'Outside Food', icon: '🍽️', color: '#f97316' },
+  { id: 2, name: 'Groceries', icon: '🛒', color: '#22c55e' },
+  { id: 3, name: 'Milk', icon: '🥛', color: '#60a5fa' },
+  { id: 4, name: 'Eggs', icon: '🥚', color: '#facc15' },
+  { id: 5, name: 'Fruits', icon: '🍎', color: '#ec4899' },
+  { id: 6, name: 'Vegetables', icon: '🥦', color: '#10b981' },
+  { id: 7, name: 'Travel', icon: '🚌', color: '#8b5cf6' },
+  { id: 8, name: 'Electricity', icon: '⚡', color: '#eab308' },
+  { id: 9, name: 'Rent', icon: '🏠', color: '#ef4444' },
+  { id: 10, name: 'Zepto', icon: '🛍️', color: '#06b6d4' },
+  { id: 11, name: 'Shopping', icon: '🛒', color: '#a855f7' },
+  { id: 12, name: 'Medical', icon: '💊', color: '#f43f5e' },
+  { id: 13, name: 'Xerox', icon: '📄', color: '#64748b' },
+  { id: 14, name: 'Miscellaneous', icon: '📦', color: '#9ca3af' },
+]

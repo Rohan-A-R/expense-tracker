@@ -1,0 +1,6 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Adaptive-icon foreground: glyph sits inside the central safe zone, transparent bg -->
+  <text x="256" y="350" text-anchor="middle"
+        font-family="Instrument Serif, Georgia, 'Times New Roman', serif"
+        font-size="310" fill="#D9481C" style="font-style:italic">&#8377;</text>
+</svg>

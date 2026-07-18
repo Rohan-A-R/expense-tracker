@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Web build output
+dist/
+*.local
+
+# Build artifact (generated APK served from public/)
+public/expense-tracker.apk
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Backups / scratch
+*.bak
+capacitor.config.ts.bak
+
+# --- Android (Capacitor) generated files ---
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/capacitor.build.gradle
+android/capacitor.settings.gradle
+*.keystore
+*.jks

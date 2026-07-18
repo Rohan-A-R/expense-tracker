@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+  body {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    background: #F5F0E4;
+    color: #1B1710;
+  }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+  input, textarea, select { -webkit-appearance: none; appearance: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+}
+
+@layer utilities {
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+  .font-serif-i { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; }
+  .font-serif-n { font-family: 'Instrument Serif', Georgia, serif; }
+}
+
+/* Editorial hairline helpers */
+.rule       { border-bottom: 1px solid rgba(27,23,16,.25); }
+.rule-ink   { border-bottom: 1px solid #1B1710; }
+.rule-2     { border-bottom: 2px solid #1B1710; }
+.rule-dot   { border-bottom: 1px dotted rgba(27,23,16,.35); }
+
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="search"],
+  textarea, select { font-size: 16px; }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(27,23,16,0.15); border-radius: 4px; }

@@ -1,0 +1,21 @@
+{
+  "appId": "com.personal.expensetracker",
+  "appName": "Expense Tracker",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#F5F0E4"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "Light",
+      "backgroundColor": "#F5F0E4"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_rupee",
+      "iconColor": "#D9481C"
+    }
+  }
+}
