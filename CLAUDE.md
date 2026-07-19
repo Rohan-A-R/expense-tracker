@@ -25,6 +25,10 @@ cd android && ./gradlew assembleDebug
 cp android/app/build/outputs/apk/debug/app-debug.apk public/expense-tracker.apk
 ```
 
+### Releasing an update (in-app update checker)
+
+The app checks `https://api.github.com/repos/Rohan-A-R/expense-tracker/releases/latest` once per day on open (`src/services/updateCheck.js`) and shows a download banner when the release tag is newer than `version` in package.json. To ship an update: bump `version` in package.json → build the APK (pipeline above) → create a GitHub release tagged `v<version>` with `expense-tracker.apk` attached as the asset (via the REST API with the stored git credential; `gh` is not installed). The tag must be `v` + the package.json version or installed apps won't see it.
+
 The finished APK is served to phones from `public/expense-tracker.apk` via the dev server (`http://<lan-ip>:5173/expense-tracker.apk`). It is a **debug-signed** build on purpose: the debug key matches the user's installed app so updates install over it and keep IndexedDB data. Do not add a release signing config — a release-signed APK causes "package conflicts" against the installed debug app. (`build-apk.sh` is an older helper with a different output path and no recursive-APK cleanup; prefer the pipeline above.)
 
 ## Architecture
