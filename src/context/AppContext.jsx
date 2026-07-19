@@ -6,6 +6,7 @@ import { DEFAULT_CATEGORIES } from '../utils/sampleData'
 import { currentFinMonth, finMonthOf } from '../utils/formatters'
 import { computeNetWorth, assetMetal, METALS } from '../utils/networth'
 import { buildDemoData } from '../utils/demoData'
+import { checkForUpdate, isNewer, APP_VERSION } from '../services/updateCheck'
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 
@@ -28,6 +29,7 @@ const initialState = {
   loading: true,
   activeMonth: currentFinMonth(1),
   demoLoaded: false,
+  update: null,        // { version, url, notes } when a newer APK release exists
 }
 
 // month is always derived from date + monthStartDay so changing payday re-buckets everything
@@ -92,6 +94,8 @@ function reducer(state, action) {
       return { ...state, pricesLoading: action.payload }
     case 'SET_PRICES':
       return { ...state, prices: action.payload.prices, pricesUpdatedAt: action.payload.at, pricesLoading: false }
+    case 'SET_UPDATE':
+      return { ...state, update: action.payload }
     case 'SET_METAL_RATES':
       return { ...state, metalRates: { ...state.metalRates, ...action.payload } }
     case 'SET_MONTH_START_DAY':
@@ -193,6 +197,24 @@ export function AppProvider({ children }) {
     const metalsHeld = [...new Set(state.assets.map(assetMetal).filter(Boolean))]
     const staleMetals = metalsHeld.filter(m => !state.metalRates[m]?.at || state.metalRates[m].at < startOfToday)
     if (staleMetals.length) refreshMetalRates(staleMetals).catch(() => {})
+    // Update check: hit GitHub releases at most once/day; cached result + dismissal
+    // live in settings so the banner survives restarts without re-fetching.
+    ;(async () => {
+      const [checkedAt, cached, dismissed] = await Promise.all([
+        db.getSetting('updateCheckedAt'), db.getSetting('updateAvailable'), db.getSetting('updateDismissed'),
+      ])
+      let info = cached || null
+      if (!checkedAt || checkedAt < startOfToday) {
+        try {
+          info = await checkForUpdate()
+          await db.setSetting('updateAvailable', info)
+          await db.setSetting('updateCheckedAt', Date.now())
+        } catch { /* offline / rate-limited — try again tomorrow */ }
+      }
+      if (info && isNewer(info.version, APP_VERSION) && info.version !== dismissed) {
+        dispatch({ type: 'SET_UPDATE', payload: info })
+      }
+    })()
     if (!state.holdings.length) return
     processSips(state.holdings)
       .catch(() => {})
@@ -497,8 +519,15 @@ export function AppProvider({ children }) {
     })
   }, [startDay])
 
+  // Hide the update banner for this release version until an even newer one appears
+  const dismissUpdate = useCallback(async () => {
+    if (state.update) await db.setSetting('updateDismissed', state.update.version)
+    dispatch({ type: 'SET_UPDATE', payload: null })
+  }, [state.update])
+
   const value = {
     ...state,
+    dismissUpdate,
     addExpense,
     updateExpense,
     deleteExpense,

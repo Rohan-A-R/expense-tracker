@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { getSetting } from './services/db'
 import BottomNav from './components/layout/BottomNav'
+import UpdateBanner from './components/layout/UpdateBanner'
 import PinLock from './components/security/PinLock'
 import LockOnboard from './components/security/LockOnboard'
 import WelcomeTour from './components/onboarding/WelcomeTour'
@@ -88,6 +89,7 @@ function AppContent() {
         </button>
       )}
 
+      <UpdateBanner />
       <BottomNav active={SUB_PAGES.includes(page) ? returnTo : page} onChange={setPage} />
       <ExpenseForm isOpen={showAdd} onClose={() => setShowAdd(false)} />
 

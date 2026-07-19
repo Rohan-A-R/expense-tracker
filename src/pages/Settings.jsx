@@ -6,6 +6,7 @@ import { isBiometricAvailable, biometricAuthenticate } from '../services/biometr
 import Modal, { ConfirmModal } from '../components/ui/Modal'
 import { exportToJSON, exportToCSV, parseImportFile } from '../services/export'
 import { formatCurrency } from '../utils/formatters'
+import { APP_VERSION } from '../services/updateCheck'
 
 const ICONS = ['🍽️','🛒','🥛','🥚','🍎','🥦','🚌','⚡','🏠','🛍️','💊','📄','📦','☕','🎬','🏋️','✈️','🎓','💇','🐾','🍕','🍜','🎮','📚','🚗','🎵']
 const COLS  = ['#D9481C','#C77A1B','#C9972E','#4E9E6A','#3E9E9A','#3E7CA6','#6C5FB0','#9B5FC0','#C6486B','#B84E8F','#7E8794','#A07C4E','#3E7CA6','#4E9E6A']
@@ -244,7 +245,8 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
       <button onClick={() => setShowReset(true)} className="flex items-center justify-center w-full py-4 border-[1.5px] border-brand rounded-2xl text-sm font-bold text-brand active:scale-[0.98]">
         Reset all data
       </button>
-      <p className="text-center text-[11px] text-ink/40 py-6">100% offline · Data stays on your device</p>
+      <p className="text-center text-[11px] text-ink/40 pt-6">100% offline · Data stays on your device</p>
+      <p className="text-center text-[11px] text-ink/40 pb-6 pt-1">Finances v{APP_VERSION}</p>
 
       {/* Category modal */}
       <Modal isOpen={showCat} onClose={() => setShowCat(false)} title={editCat ? 'Edit category' : 'New category'}>
