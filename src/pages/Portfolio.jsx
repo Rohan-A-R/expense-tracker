@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext'
 import Modal, { ConfirmModal } from '../components/ui/Modal'
 import { formatCurrency } from '../utils/formatters'
 import { searchStock, searchMf, priceKey } from '../services/marketData'
+import HoldingDetail from '../components/portfolio/HoldingDetail'
 
 const GREEN = '#4E9E6A'
 const RUST = '#D9481C'
@@ -35,6 +36,7 @@ export default function Portfolio({ onBack }) {
   const [showAdd, setShowAdd] = useState(false)
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
+  const [detail, setDetail] = useState(null)
 
   const rows = useMemo(() => holdings.map(h => {
     const p = prices[priceKey(h)]
@@ -140,7 +142,7 @@ export default function Portfolio({ onBack }) {
             const dayPct = p && p.prevClose > 0 ? ((p.price - p.prevClose) / p.prevClose) * 100 : null
             return (
               <div key={h.id} className="flex items-stretch gap-3 py-3.5 rule-dot">
-                <button onClick={() => setEdit(h)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                <button onClick={() => setDetail(h)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                   <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: pnl == null ? 'rgba(27,23,16,.15)' : pnlColor(pnl) }} />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate flex items-center gap-1.5">
@@ -172,13 +174,22 @@ export default function Portfolio({ onBack }) {
             )
           })}
           <p className="text-center text-[11px] text-ink/40 pt-5">
-            Tap a holding to edit · stock prices via Yahoo · MF NAV via AMFI
+            Tap a holding for full details · stock prices via Yahoo · MF NAV via AMFI
           </p>
         </>
       )}
 
       <AddHolding open={showAdd} holdings={holdings} onClose={() => setShowAdd(false)}
         onSave={async (h) => { const saved = await addHolding(h); refreshPrices([saved, ...holdings]); setShowAdd(false) }} />
+
+      {detail && (
+        <HoldingDetail
+          holding={holdings.find(h => h.id === detail.id) || detail}
+          onBack={() => setDetail(null)}
+          onEdit={(h) => setEdit(h)}
+          onDelete={(h) => { setDetail(null); setDel(h) }}
+        />
+      )}
 
       <EditHolding holding={edit} onClose={() => setEdit(null)}
         onSave={async (h, vals) => { await updateHolding(h, vals); setEdit(null) }}
