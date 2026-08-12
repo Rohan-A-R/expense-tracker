@@ -4,8 +4,15 @@ import { useApp } from '../context/AppContext'
 import Modal, { ConfirmModal } from '../components/ui/Modal'
 import { formatCurrency } from '../utils/formatters'
 import { computeNetWorth, assetValue, ASSET_TYPES, typeMeta, METALS, assetMetal, isMetalAsset, finenessOf } from '../utils/networth'
+import { priceKey, fetchStockChart, fetchMfSeries } from '../services/marketData'
 
 const todayISO = () => new Date().toISOString().split('T')[0]
+
+// Latest value in an oldest-first [{t, close}] series at or before time `t`.
+function priceOnOrBefore(series, t) {
+  for (let i = series.length - 1; i >= 0; i--) if (series[i].t <= t) return series[i].close
+  return null
+}
 
 const INK = '#1B1710'
 const GREEN = '#4E9E6A'
@@ -28,6 +35,64 @@ export default function NetWorth({ onOpenPortfolio, onOpenUdhaar }) {
   const [del, setDel] = useState(null)
 
   const nw = useMemo(() => computeNetWorth({ holdings, prices, assets, udhaar, metalRates }), [holdings, prices, assets, udhaar, metalRates])
+
+  // Reconstruct a monthly net-worth history so the trend spans real time and the range
+  // pills actually change the view (like Groww). Investments are valued at PAST prices
+  // from the history we already fetch; non-investment worth (assets, udhaar) is held at
+  // its current value as a baseline. Only kicks in when real daily snapshots are too few
+  // to span a meaningful range; otherwise the true snapshots are used as-is.
+  const [histSeries, setHistSeries] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    const spanDays = netWorthSnaps.length >= 2
+      ? (new Date(netWorthSnaps[netWorthSnaps.length - 1].date) - new Date(netWorthSnaps[0].date)) / 86400000
+      : 0
+    if (!holdings.length || spanDays >= 60) { setHistSeries(null); return }
+    ;(async () => {
+      try {
+        let invNow = 0
+        holdings.forEach(h => { const p = prices[priceKey(h)]; if (p) invNow += Number(h.qty) * p.price })
+        const baseline = nw.total - invNow   // assets + udhaar, held constant historically
+        const hist = await Promise.all(holdings.map(async h => {
+          try {
+            const r = h.kind === 'mf' ? await fetchMfSeries(h.schemeCode) : await fetchStockChart(h.symbol, '5Y')
+            return { h, series: r.series || [] }
+          } catch { return { h, series: [] } }
+        }))
+        if (cancelled) return
+        const withHist = hist.filter(x => x.series.length)
+        if (!withHist.length) { setHistSeries(null); return }
+        const earliest = Math.min(...withHist.map(x => x.series[0].t))
+        const now = new Date()
+        const points = []
+        let d = new Date(now.getFullYear(), now.getMonth(), 1)
+        for (let i = 0; i < 60; i++) {
+          const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+          const t = monthEnd.getTime()
+          if (t <= Date.now() && t >= earliest) {
+            let inv = 0
+            withHist.forEach(({ h, series }) => {
+              const price = priceOnOrBefore(series, t)
+              if (price != null) inv += Number(h.qty) * price
+            })
+            points.push({ date: monthEnd.toISOString().split('T')[0], total: Math.round(inv + baseline) })
+          }
+          if (t < earliest) break
+          d = new Date(d.getFullYear(), d.getMonth() - 1, 1)
+        }
+        // merge reconstructed months with real snapshots (snapshots win on shared dates)
+        const byDate = new Map()
+        points.forEach(p => byDate.set(p.date, p))
+        netWorthSnaps.forEach(s => byDate.set(s.date, { date: s.date, total: s.total }))
+        const merged = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+        if (!cancelled) setHistSeries(merged.length >= 2 ? merged : null)
+      } catch { if (!cancelled) setHistSeries(null) }
+    })()
+    return () => { cancelled = true }
+  }, [holdings, prices, assets, udhaar, metalRates, netWorthSnaps, nw.total])
+
+  const trendData = histSeries && histSeries.length >= 2 ? histSeries : netWorthSnaps
+  const trendReconstructed = !!(histSeries && histSeries.length >= 2)
 
   const empty = assets.length === 0 && holdings.length === 0 && udhaar.filter(u => u.status === 'open').length === 0
 
@@ -54,8 +119,8 @@ export default function NetWorth({ onOpenPortfolio, onOpenUdhaar }) {
             </div>
           </div>
 
-          {netWorthSnaps.length >= 2 ? (
-            <TrendChart snaps={netWorthSnaps} />
+          {trendData.length >= 2 ? (
+            <TrendChart snaps={trendData} reconstructed={trendReconstructed} />
           ) : (
             <div className="px-5 mt-2 flex items-center gap-2">
               <span className="text-sm">📈</span>
@@ -150,8 +215,8 @@ const RANGES = [
 ]
 
 // Stock-app style trend: range pills (1M/6M/1Y/5Y/ALL) + area chart, dark themed.
-function TrendChart({ snaps }) {
-  const [range, setRange] = useState('ALL')
+function TrendChart({ snaps, reconstructed }) {
+  const [range, setRange] = useState('1Y')
 
   const { data, rangeChange, label } = useMemo(() => {
     const r = RANGES.find(x => x.id === range) || RANGES[4]
@@ -229,6 +294,12 @@ function TrendChart({ snaps }) {
           )
         })}
       </div>
+
+      {reconstructed && (
+        <p className="px-5 mt-2 text-[10px] leading-snug" style={{ color: 'rgba(245,240,228,.4)' }}>
+          History before daily tracking is estimated from your current holdings at past market prices.
+        </p>
+      )}
     </div>
   )
 }

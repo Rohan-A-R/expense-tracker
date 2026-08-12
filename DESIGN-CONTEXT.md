@@ -57,7 +57,7 @@ Active-month header; monthly budget card (spent vs budget, colored progress, rem
 
 The hub that ties everything together.
 - **Ink hero:** big **net worth** number (rust if negative), You own / You owe split.
-- **Trend:** once ≥2 daily snapshots exist, a **stock-app-style area chart** with range pills **1M · 6M · 1Y · 5Y · ALL** and a range-specific ▲/▼ return. Before that, a compact "trend builds as days pass" note (no empty chart).
+- **Trend:** a **stock-app-style area chart** with range pills **1M · 6M · 1Y · 5Y · ALL** and a range-specific ▲/▼ return. When real daily snapshots span < 60 days, the history is **reconstructed** so the ranges actually differ — current holdings valued at past prices (from the price/NAV history we fetch), with assets/udhaar held as a constant baseline; recent days still use the true snapshots, and a caption notes the reconstruction. Before any data exists, a compact "trend builds as days pass" note (no empty chart).
 - **Breakdown rows:** Investments (live portfolio value → opens Portfolio), Udhaar (net, → ledger), plus manual **assets**.
 - **+ Add asset** modal — types: **Metal** (Gold/Silver/Platinum selector + weight + purity, live-valued), **Fixed deposit** (principal + rate + date → auto-compounds), **Loan/due** (outstanding + rate + EMI + date → auto-amortizes), **Other** (static value). Dynamic assets show a **LIVE** badge and a "value today" preview.
 
@@ -65,9 +65,10 @@ The hub that ties everything together.
 
 Ink hero (current value, today/total P&L chips, invested, total returns); Stocks-vs-MF allocation bar; holdings list with per-row P&L accent, SIP badge, LTP/NAV, live prices (refresh button + "updated" label). Add/Edit holding modals: stock/MF search, quantity + avg buy, optional **monthly SIP** (auto-adds units each month at that month's NAV); re-adding an owned holding **averages** in (weighted avg buy + summed qty).
 
-**Holding detail (tap any holding — full-screen, Groww/Kite style):** ink chart card with big price/NAV, today's ▲/▼, and an area chart with range pills **1M · 6M · 1Y · 5Y · MAX**; **Your holding** grid (units/qty, avg cost, invested, current value, total & today's returns). For **stocks**: PRICE STATS (prev close, day range, 52-week range, volume, exchange) + FUNDAMENTALS (market cap, P/E, forward P/E, EPS, book value, P/B, dividend yield, beta) + FINANCIALS (revenue, profit margin, ROE, debt/equity, current ratio, revenue growth) + ANALYST VIEW (rating + target) + ABOUT (sector, industry, employees, business summary). For **funds**: RETURNS (1M/6M/1Y/3Y/5Y + since-inception, annualized past ~1y, computed from NAV history) + FUND INFO (NAV date, category, fund house, type). Stock fundamentals come from Yahoo `quoteSummary` (needs a cookie+crumb handshake); fetched data is cached **once per calendar day per holding** so reopening is instant. Degrades gracefully with an honest note when unavailable.
+**Holding detail (tap any holding — full-screen, Groww/Kite style):** ink chart card with big price/NAV, today's ▲/▼, and an area chart with range pills **1M · 6M · 1Y · 5Y · MAX**; **Your holding** grid (units/qty, avg cost, invested, current value, total & today's returns). For **stocks**, stat sections are paired into two columns: **PRICE STATS ↔ FUNDAMENTALS** and **FINANCIALS ↔ ANALYST VIEW** (each stat is label-above-value so long ranges fit the narrow columns), then **ABOUT** as full-width rows (sector, industry, employees) with the business summary clamped to a few lines behind a **View more** toggle. For **funds**: RETURNS (1M/6M/1Y/3Y/5Y + since-inception, annualized past ~1y, computed from NAV history) + FUND INFO (NAV date, category, fund house, type). Stock fundamentals come from Yahoo `quoteSummary` (needs a cookie+crumb handshake); fetched data is cached **once per calendar day per holding** so reopening is instant. Degrades gracefully with an honest note when unavailable.
 
 **Portfolio extras:**
+- Each holding row carries a **›** chevron so the tap-to-open-detail affordance is discoverable.
 - **Market pulse strip** (top of Portfolio) — NIFTY 50 / SENSEX / USD-INR with ▲/▼ %, editorial stat-row style, for at-a-glance market context.
 - **Brand logos** on every holding (list rows + detail header) via logo.dev. Stock domains resolve dynamically (Yahoo `website` / a keyless name→domain lookup); fund houses use a small fixed AMC→domain map; unresolved → a tinted monogram. The resolved domain is **persisted onto the holding (`logoDomain`)** so it's looked up only once and cleaned up when the holding is deleted.
 - **News** — per-holding **NEWS** on the detail screen and a general **MARKET NEWS** section on Portfolio, from Google News RSS (India). News is **never stored** — fetched for display only.
@@ -84,7 +85,7 @@ Stats grid (this month / all time / entries / categories); **Money** links (Net 
 
 ## Onboarding & security
 
-- **Welcome tour** on first launch: 6 full-screen slides, each a real screenshot of the app filled with demo data, then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
+- **Welcome tour** on first launch: 7 full-screen slides, each a real screenshot of the app filled with demo data (Home, Portfolio, **Holding detail**, Money, Breakdown, Trends, Udhaar), then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
 - **App lock:** 4-digit PIN + optional **fingerprint** (biometric) unlock; a first-launch prompt offers to set it up.
 - **In-app updates:** the app is sideloaded (not on Play Store), so on open it checks its GitHub **latest release** at most once per calendar day; when a newer version exists it shows a dismissible ink **update banner** ("Finances vX.Y.Z" + Download). Settings shows the installed **version footer**. Releasing = bump `version` in package.json, build the APK, and publish a GitHub release tagged `v<version>` with the APK attached.
 
@@ -108,7 +109,8 @@ Stats grid (this month / all time / entries / categories); **Money** links (Net 
 
 // holding (stock / mutual fund)
 { id, kind:'stock'|'mf', symbol?|schemeCode?, name, qty, avgBuy,
-  sip?:{ amount, day, lastRun:'YYYY-MM' }, createdAt }
+  sip?:{ amount, day, lastRun:'YYYY-MM' }, logoDomain?, createdAt }
+//   logoDomain: resolved brand-logo domain, saved once ('' = resolved, no logo)
 
 // asset (net-worth item)
 { id, type:'metal'|'fd'|'loan'|'other', name, value?,

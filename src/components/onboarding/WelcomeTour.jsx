@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import homeImg from '../../assets/tour/home.jpg'
 import portfolioImg from '../../assets/tour/portfolio.jpg'
+import detailImg from '../../assets/tour/detail.jpg'
 import moneyImg from '../../assets/tour/money.jpg'
 import breakdownImg from '../../assets/tour/breakdown.jpg'
 import trendsImg from '../../assets/tour/trends.jpg'
@@ -11,6 +12,7 @@ import udhaarImg from '../../assets/tour/udhaar.jpg'
 const SLIDES = [
   { img: homeImg,      accent: '#D9481C', title: 'Everything at a glance',  body: "Your month's spend, budget, portfolio and dues — all on one home screen." },
   { img: portfolioImg, accent: '#4E9E6A', title: 'Track your investments',  body: 'Stocks, mutual funds and SIPs with live prices, returns and allocation.' },
+  { img: detailImg,    accent: '#B5761F', title: 'Deep-dive any holding',   body: 'Tap a stock or fund for its live chart, fundamentals, returns and latest news.' },
   { img: moneyImg,     accent: '#6C5FB0', title: 'Your whole net worth',    body: 'Metals, FDs, loans and investments in one number — with a trend that grows.' },
   { img: breakdownImg, accent: '#C9972E', title: 'Where your money goes',   body: 'A clear category breakdown for every month.' },
   { img: trendsImg,    accent: '#3E7CA6', title: 'Spot the trends',         body: 'Watch each category move, month over month.' },

@@ -186,13 +186,14 @@ export default function Portfolio({ onBack }) {
                       </div>
                     )}
                   </div>
+                  <span aria-hidden className="self-center text-ink/30 text-xl leading-none pl-1 -mr-0.5">›</span>
                 </button>
                 <button onClick={() => setDel(h)} aria-label="Remove" className="text-[13px] opacity-30 active:opacity-70 self-center p-1">🗑</button>
               </div>
             )
           })}
           <p className="text-center text-[11px] text-ink/40 pt-5">
-            Tap a holding for full details · stock prices via Yahoo · MF NAV via AMFI
+            Tap any holding for chart, news &amp; details · prices via Yahoo · MF NAV via AMFI
           </p>
         </>
       )}

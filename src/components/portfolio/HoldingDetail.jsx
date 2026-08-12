@@ -312,34 +312,33 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
           </>
         )}
 
-        {/* price stats / fund info */}
-        <KVSection title={isMf ? 'FUND INFO' : 'PRICE STATS'} rows={marketStats} />
+        {/* MF: fund info stays as full-width rows */}
+        {isMf && <KVSection title="FUND INFO" rows={marketStats} />}
+        {isMf && err && !stats && <p className="text-[12px] text-ink/45 py-2">Couldn't load live data — showing what's saved on your device.</p>}
 
-        {/* stock: fundamentals, financials, analysts, about */}
+        {/* Stock: paired two-column stat sections */}
         {!isMf && (
           <>
+            <div className="grid grid-cols-2 gap-x-5 items-start">
+              <ColSection title="PRICE STATS" rows={marketStats} />
+              <ColSection title="FUNDAMENTALS" rows={fundamentals} />
+            </div>
+            <div className="grid grid-cols-2 gap-x-5 items-start">
+              <ColSection title="FINANCIALS" rows={financials} />
+              <ColSection title="ANALYST VIEW" rows={analysts} />
+            </div>
             {fundState === 'loading' && !fund && (
-              <p className="text-[12px] text-ink/45 pt-6">Loading fundamentals…</p>
+              <p className="text-[12px] text-ink/45 pt-5">Loading fundamentals…</p>
             )}
             {fundState === 'error' && !fund && (
-              <p className="text-[12px] text-ink/45 pt-6 leading-snug">
+              <p className="text-[12px] text-ink/45 pt-5 leading-snug">
                 Fundamentals (P/E, financials, ownership) load in the installed app — Yahoo blocks them in the browser.
               </p>
             )}
-            {fund && (
-              <>
-                <KVSection title="FUNDAMENTALS" rows={fundamentals} />
-                <KVSection title="FINANCIALS" rows={financials} />
-                <KVSection title="ANALYST VIEW" rows={analysts} />
-                <KVSection title="ABOUT" rows={about} />
-                {fund.summary && (
-                  <p className="text-[12.5px] text-ink/65 leading-relaxed pt-3">{fund.summary}</p>
-                )}
-              </>
-            )}
+            {about && <KVSection title="ABOUT" rows={about} />}
+            {fund?.summary && <AboutSummary text={fund.summary} />}
           </>
         )}
-        {isMf && err && !stats && <p className="text-[12px] text-ink/45 py-2">Couldn't load live data — showing what's saved on your device.</p>}
 
         {/* news for this holding */}
         <NewsList query={newsQuery(h)} title="NEWS" count={5} />
@@ -372,6 +371,39 @@ function KVSection({ title, rows }) {
         ))}
       </div>
     </>
+  )
+}
+
+// Narrow-column stat list (label stacked above value) — pairs two sections side by side.
+function ColSection({ title, rows }) {
+  const filled = (rows || []).filter(([, v]) => v != null && v !== '')
+  if (!filled.length) return null
+  return (
+    <div className="mt-7">
+      <div className="text-[10.5px] font-bold tracking-[1.5px] text-ink/55 rule-ink pb-2 mb-1">{title}</div>
+      {filled.map(([k, v]) => (
+        <div key={k} className="py-2 rule-dot">
+          <div className="text-[10px] tracking-[0.5px] text-ink/45">{k}</div>
+          <div className="text-[13px] font-semibold leading-snug break-words">{v}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Business summary, clamped to a few lines with a View more / less toggle.
+function AboutSummary({ text }) {
+  const [open, setOpen] = useState(false)
+  const long = text.length > 200
+  return (
+    <div className="pt-3">
+      <p className={`text-[12.5px] text-ink/65 leading-relaxed ${!open && long ? 'line-clamp-4' : ''}`}>{text}</p>
+      {long && (
+        <button onClick={() => setOpen(o => !o)} className="text-[12px] font-bold text-brand mt-1.5 active:opacity-60">
+          {open ? 'View less' : 'View more'}
+        </button>
+      )}
+    </div>
   )
 }
 
