@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
 import Modal, { ConfirmModal } from '../components/ui/Modal'
 import { formatCurrency } from '../utils/formatters'
-import { searchStock, searchMf, priceKey } from '../services/marketData'
+import { searchStock, searchMf, priceKey, fetchMarketPulse, fetchDomainByName } from '../services/marketData'
 import HoldingDetail from '../components/portfolio/HoldingDetail'
+import LogoMark from '../components/portfolio/LogoMark'
+import NewsList from '../components/portfolio/NewsList'
+import { mfDomain, newsQuery } from '../utils/brands'
 
 const GREEN = '#4E9E6A'
 const RUST = '#D9481C'
@@ -32,11 +35,22 @@ function Legend({ color, label, pct }) {
 }
 
 export default function Portfolio({ onBack }) {
-  const { holdings, prices, pricesUpdatedAt, pricesLoading, addHolding, updateHolding, deleteHolding, refreshPrices } = useApp()
+  const { holdings, prices, pricesUpdatedAt, pricesLoading, addHolding, updateHolding, deleteHolding, refreshPrices, saveHoldingLogo } = useApp()
   const [showAdd, setShowAdd] = useState(false)
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
   const [detail, setDetail] = useState(null)
+
+  // Resolve each holding's brand-logo domain exactly once, then persist it onto the
+  // holding. After that it's read straight from the record — no lookup on later opens,
+  // and it's cleaned up automatically when the holding is deleted. '' = resolved, no logo.
+  useEffect(() => {
+    holdings.forEach(h => {
+      if (h.logoDomain !== undefined) return
+      if (h.kind === 'mf') saveHoldingLogo(h, mfDomain(h.name) || '')
+      else fetchDomainByName(h.name).then(d => saveHoldingLogo(h, d || '')).catch(() => {})
+    })
+  }, [holdings, saveHoldingLogo])
 
   const rows = useMemo(() => holdings.map(h => {
     const p = prices[priceKey(h)]
@@ -82,6 +96,9 @@ export default function Portfolio({ onBack }) {
         <span className="font-serif-i text-[28px] leading-none flex-1">Portfolio</span>
         <button onClick={() => setShowAdd(true)} className="px-3.5 py-2.5 rounded-xl bg-ink text-paper text-xs font-bold active:scale-95">+ Add</button>
       </div>
+
+      {/* Market pulse — Nifty / Sensex / USD-INR context for the day's P&L */}
+      <MarketPulse />
 
       {holdings.length === 0 ? (
         <div className="py-20 text-center text-ink/40">
@@ -142,8 +159,9 @@ export default function Portfolio({ onBack }) {
             const dayPct = p && p.prevClose > 0 ? ((p.price - p.prevClose) / p.prevClose) * 100 : null
             return (
               <div key={h.id} className="flex items-stretch gap-3 py-3.5 rule-dot">
-                <button onClick={() => setDetail(h)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                <button onClick={() => setDetail(h)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
                   <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: pnl == null ? 'rgba(27,23,16,.15)' : pnlColor(pnl) }} />
+                  <LogoMark domain={h.logoDomain || undefined} query={h.logoDomain === undefined && h.kind !== 'mf' ? h.name : undefined} name={h.name} size={34} />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate flex items-center gap-1.5">
                       <span className="truncate">{h.name}</span>
@@ -179,6 +197,9 @@ export default function Portfolio({ onBack }) {
         </>
       )}
 
+      {/* Market news — general Indian-market headlines for context */}
+      <NewsList query={newsQuery(null)} title="MARKET NEWS" count={6} />
+
       <AddHolding open={showAdd} holdings={holdings} onClose={() => setShowAdd(false)}
         onSave={async (h) => { const saved = await addHolding(h); refreshPrices([saved, ...holdings]); setShowAdd(false) }} />
 
@@ -202,6 +223,39 @@ export default function Portfolio({ onBack }) {
         message={del ? `Remove ${del.name} from your portfolio? Your other data is unaffected.` : ''}
         confirmLabel="Remove" danger
       />
+    </div>
+  )
+}
+
+// Index/FX ticker strip — market context above the portfolio. Fetches on open;
+// silently renders nothing if unavailable (offline / browser without the dev proxy).
+function MarketPulse() {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetchMarketPulse()
+      .then(r => { if (!cancelled) setRows(r) })
+      .catch(() => { if (!cancelled) setRows([]) })
+    return () => { cancelled = true }
+  }, [])
+  if (!rows || rows.length === 0) return null
+  const fmt = (r) => r.isFx ? r.price.toFixed(2) : Math.round(r.price).toLocaleString('en-IN')
+  return (
+    <div className="flex mt-4" style={{ borderTop: '1px solid rgba(27,23,16,.2)', borderBottom: '1px solid rgba(27,23,16,.2)' }}>
+      {rows.map((r, i) => {
+        const up = (r.changePct ?? 0) >= 0
+        const col = r.changePct == null ? 'rgba(27,23,16,.5)' : up ? '#4E9E6A' : '#D9481C'
+        return (
+          <div key={r.key} className="flex-1 py-2.5 min-w-0"
+            style={{ paddingLeft: i === 0 ? 0 : 12, paddingRight: i === rows.length - 1 ? 0 : 12, borderRight: i < rows.length - 1 ? '1px dotted rgba(27,23,16,.32)' : 'none' }}>
+            <div className="text-[9px] font-bold tracking-[1.2px] text-ink/50 truncate">{r.label}</div>
+            <div className="font-serif-n text-[17px] leading-tight truncate">{fmt(r)}</div>
+            {r.changePct != null && (
+              <div className="text-[10px] font-bold" style={{ color: col }}>{up ? '▲' : '▼'} {Math.abs(r.changePct).toFixed(2)}%</div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

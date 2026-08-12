@@ -65,18 +65,28 @@ The hub that ties everything together.
 
 Ink hero (current value, today/total P&L chips, invested, total returns); Stocks-vs-MF allocation bar; holdings list with per-row P&L accent, SIP badge, LTP/NAV, live prices (refresh button + "updated" label). Add/Edit holding modals: stock/MF search, quantity + avg buy, optional **monthly SIP** (auto-adds units each month at that month's NAV); re-adding an owned holding **averages** in (weighted avg buy + summed qty).
 
+**Holding detail (tap any holding — full-screen, Groww/Kite style):** ink chart card with big price/NAV, today's ▲/▼, and an area chart with range pills **1M · 6M · 1Y · 5Y · MAX**; **Your holding** grid (units/qty, avg cost, invested, current value, total & today's returns). For **stocks**: PRICE STATS (prev close, day range, 52-week range, volume, exchange) + FUNDAMENTALS (market cap, P/E, forward P/E, EPS, book value, P/B, dividend yield, beta) + FINANCIALS (revenue, profit margin, ROE, debt/equity, current ratio, revenue growth) + ANALYST VIEW (rating + target) + ABOUT (sector, industry, employees, business summary). For **funds**: RETURNS (1M/6M/1Y/3Y/5Y + since-inception, annualized past ~1y, computed from NAV history) + FUND INFO (NAV date, category, fund house, type). Stock fundamentals come from Yahoo `quoteSummary` (needs a cookie+crumb handshake); fetched data is cached **once per calendar day per holding** so reopening is instant. Degrades gracefully with an honest note when unavailable.
+
+**Portfolio extras:**
+- **Market pulse strip** (top of Portfolio) — NIFTY 50 / SENSEX / USD-INR with ▲/▼ %, editorial stat-row style, for at-a-glance market context.
+- **Brand logos** on every holding (list rows + detail header) via logo.dev. Stock domains resolve dynamically (Yahoo `website` / a keyless name→domain lookup); fund houses use a small fixed AMC→domain map; unresolved → a tinted monogram. The resolved domain is **persisted onto the holding (`logoDomain`)** so it's looked up only once and cleaned up when the holding is deleted.
+- **News** — per-holding **NEWS** on the detail screen and a general **MARKET NEWS** section on Portfolio, from Google News RSS (India). News is **never stored** — fetched for display only.
+
+Runtime market calls (charts, fundamentals, pulse, logos, news) go direct via `CapacitorHttp` in the APK; in the browser a **dev-only Vite proxy** (`/yfin`, `/yahoo-fundamentals`, `/gnews`) routes the CORS-blocked ones so previews work.
+
 ## Screen — Udhaar (lend/borrow, sub-page)
 
 To collect / To pay summary (per-person netted); one card per person (owes-you green / you-owe rust) with expandable entries; add entry (direction, person with autocomplete, amount, date, note); settle-up (moves to history); settled history.
 
 ## Screen — Settings (SETTINGS)
 
-Stats grid (this month / all time / entries / categories); **Money** links (Net worth, Portfolio, Udhaar); **Preferences** — "Month starts on" (1–28, salary day), App lock (PIN), Fingerprint unlock (when a PIN is set and device supports it), Daily reminder (9 PM notification), Replay app tour; **Categories** manager (icon + color, add/edit/delete); **Backup & Data** — Export JSON, Export CSV, Import; **Clear sample data** (only when demo is loaded); **Reset all data** (confirm).
+Stats grid (this month / all time / entries / categories); **Money** links (Net worth, Portfolio, Udhaar); **Preferences** — "Month starts on" (1–28, salary day), App lock (PIN), Fingerprint unlock (when a PIN is set and device supports it), Daily reminder (9 PM notification), Replay app tour; **Categories** manager (icon + color, add/edit/delete); **Backup & Data** — Export JSON, Export CSV, Import; **Clear sample data** (only when demo is loaded); **Reset all data** (confirm); footer shows "100% offline" and the installed **app version**.
 
 ## Onboarding & security
 
 - **Welcome tour** on first launch: 6 full-screen slides, each a real screenshot of the app filled with demo data, then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
 - **App lock:** 4-digit PIN + optional **fingerprint** (biometric) unlock; a first-launch prompt offers to set it up.
+- **In-app updates:** the app is sideloaded (not on Play Store), so on open it checks its GitHub **latest release** at most once per calendar day; when a newer version exists it shows a dismissible ink **update banner** ("Finances vX.Y.Z" + Download). Settings shows the installed **version footer**. Releasing = bump `version` in package.json, build the APK, and publish a GitHub release tagged `v<version>` with the APK attached.
 
 ---
 
@@ -111,7 +121,8 @@ Stats grid (this month / all time / entries / categories); **Money** links (Net 
 
 // settings (key-value): monthStartDay, appPin (hash), appBiometric, lockOnboarded,
 //   dailyReminder, tourDone, demoLoaded, demoLoadedAt,
-//   priceCache, pricesUpdatedAt, metalRates, udhaarStripAt, udhaarNudgeAt
+//   priceCache, pricesUpdatedAt, metalRates, udhaarStripAt, udhaarNudgeAt,
+//   updateCheckedAt, updateAvailable, updateDismissed
 ```
 
 `income` and `investments` stores exist from an earlier version and are unused. There is no SMS store (removed).
@@ -130,5 +141,5 @@ Stats grid (this month / all time / entries / categories); **Money** links (Net 
 ## Tech constraints
 
 - React 18 (JSX, no TypeScript); TailwindCSS 3 (paper-theme tokens in `tailwind.config.js`); Recharts for charts; Capacitor 6 (Android WebView, touch-first, no hover).
-- Fonts load from Google Fonts (DM Sans + Instrument Serif); all *data* is offline, and the only runtime network calls are optional market-price/metal lookups (Yahoo Finance + mfapi.in/AMFI) — **stock & metal prices are CORS-blocked in a browser and only work in the installed APK; MF NAV works in the browser too.**
+- Fonts load from Google Fonts (DM Sans + Instrument Serif); all *data* is offline, and the only runtime network calls are optional market lookups (Yahoo Finance + mfapi.in/AMFI): prices/metals, holding-detail charts, and stock fundamentals. In the **installed APK** these go direct via `CapacitorHttp` (bypasses CORS). MF NAV also works in a plain browser. Yahoo endpoints are CORS-blocked in a browser, so a **dev-only Vite proxy** (`/yfin` + a `/yahoo-fundamentals` middleware in `vite.config.js`) routes them server-side, letting charts and fundamentals work in the `localhost:5173` preview too. The proxy is never bundled into production.
 - Single-column mobile layout, `max-w-lg` centered; icons are emoji or inline SVG.

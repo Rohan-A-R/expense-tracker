@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ReferenceLine } from 'recharts'
 import ReportTab from '../components/insights/ReportTab'
-import Modal, { ConfirmModal } from '../components/ui/Modal'
+import Modal from '../components/ui/Modal'
 import { generateReport } from '../utils/report'
 import { formatCurrency, formatMonth, currentFinMonth } from '../utils/formatters'
 
 const TABS = ['Breakdown', 'Trends', 'Monthly', 'Report']
 const INK = '#1B1710'
 const ACCENT = '#D9481C'
+const GREEN = '#4E9E6A'
 const TREND_MONTHS = 5
 const ICONS = ['🍽️','🛒','🥛','🥚','🍎','🥦','🚌','⚡','🏠','🛍️','💊','📄','📦','☕','🎬','🏋️','✈️','🎓','💇','🐾','🍕','🍜','🎮','📚','🚗','🎵']
 const COLS  = ['#D9481C','#C77A1B','#C9972E','#4E9E6A','#3E9E9A','#3E7CA6','#6C5FB0','#9B5FC0','#C6486B','#B84E8F','#7E8794','#A07C4E']
@@ -19,7 +20,7 @@ function tint(hex, a) {
   return `rgba(${r},${g},${b},${a})`
 }
 
-// Compact amount for tiny bar labels: 3265 -> 3.3k, 254 -> 254, 0 -> ''
+// Compact amount for tiny bar labels: 3265 → 3.3k, 254 → 254, 0 → ''
 function compact(v) {
   if (!v) return ''
   if (v >= 100000) return `${(v / 100000).toFixed(1)}L`
@@ -38,17 +39,22 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export default function Analytics() {
-  const { expenses, categories, budgets, addCategory, deleteCategory, monthStartDay } = useApp()
+  const { expenses, categories, budgets, monthStartDay, addCategory } = useApp()
   const [tab, setTab] = useState('Breakdown')
   const [showAdd, setShowAdd] = useState(false)
   const [catForm, setCatForm] = useState({ name: '', icon: '📦', color: '#D9481C' })
-  const [delCat, setDelCat] = useState(null)
 
   async function saveCategory() {
     if (!catForm.name.trim()) return
-    await addCategory({ ...catForm })
+    const saved = await addCategory({ ...catForm })
+    if (saved?.id != null) setAdded(a => new Set(a).add(saved.id))  // track the new one immediately
     setShowAdd(false); setCatForm({ name: '', icon: '📦', color: '#D9481C' })
   }
+  // Which categories the Trends tab tracks. Non-destructive: hiding a category here
+  // only removes it from this view (it is NOT deleted). Defaults to every category
+  // with spend in the window; `added` lets you also track zero-spend ones.
+  const [hidden, setHidden] = useState(() => new Set())
+  const [added, setAdded] = useState(() => new Set())
 
   const months = useMemo(() => {
     const s = new Set(expenses.map(e => e.month))
@@ -106,11 +112,18 @@ export default function Analytics() {
       const latest = series[series.length - 1]
       const prev = series[series.length - 2] || 0
       const change = prev > 0 ? Math.round(((latest - prev) / prev) * 100) : (latest > 0 ? null : 0)
-      const avg = total / series.length
-      return { cat, series, total, latest, change, avg }
+      return { cat, series, total, latest, change }
     })
     .sort((a, b) => b.total - a.total)
   }, [expenses, categories, trendMonths])
+
+  // Shown = has spend (and not hidden) OR explicitly added. Pills offer the rest.
+  const shownTrends = trendData.filter(t => !hidden.has(t.cat.id) && (t.total > 0 || added.has(t.cat.id)))
+  const shownIds = new Set(shownTrends.map(t => t.cat.id))
+  const addable = categories.filter(c => !shownIds.has(c.id))
+
+  const trackCat = (id) => { setAdded(a => new Set(a).add(id)); setHidden(h => { const n = new Set(h); n.delete(id); return n }) }
+  const untrackCat = (id) => { setHidden(h => new Set(h).add(id)); setAdded(a => { const n = new Set(a); n.delete(id); return n }) }
 
   const monthTotal = pieData.reduce((s, d) => s + d.value, 0)
   const report = useMemo(() => generateReport({
@@ -131,21 +144,16 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen px-6 pt-4">
-      <div className="font-serif-i text-[34px] rule-2 pb-3 mb-1">Analysis</div>
-
-      {/* Month select */}
-      {months.length > 0 && (
-        <select
-          value={effectiveMonth} onChange={e => setSelMonth(e.target.value)}
-          className="w-full py-3 mt-2 bg-transparent rule text-ink text-sm font-semibold focus:outline-none"
-        >
-          {months.map(m => (
-            <option key={m} value={m}>
-              {formatMonth(m)} · {formatCurrency(expenses.filter(e => e.month === m).reduce((s, e) => s + Number(e.amount), 0))}
-            </option>
-          ))}
-        </select>
-      )}
+      {/* Header — title + month (doubles as the month switcher) */}
+      <div className="flex items-baseline justify-between rule-2 pb-3">
+        <span className="font-serif-i text-[34px] leading-none">Analysis</span>
+        {months.length > 0 && (
+          <select value={effectiveMonth} onChange={e => setSelMonth(e.target.value)}
+            className="appearance-none bg-transparent text-[11px] font-bold tracking-[2px] text-ink/60 text-right focus:outline-none active:opacity-60">
+            {months.map(m => <option key={m} value={m}>{formatMonth(m).toUpperCase()}</option>)}
+          </select>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="flex rule mt-4 mb-6">
@@ -153,7 +161,7 @@ export default function Analytics() {
           const on = tab === t
           return (
             <button key={t} onClick={() => setTab(t)}
-              className="flex-1 py-3 text-[12.5px] font-bold"
+              className="flex-1 py-3 text-[12.5px] font-bold transition-colors"
               style={on ? { color: INK, borderBottom: `2px solid ${ACCENT}`, marginBottom: -1 } : { color: 'rgba(27,23,16,.42)' }}>
               {t}
             </button>
@@ -232,7 +240,7 @@ export default function Analytics() {
               <span className="text-[10px] font-bold tracking-[1.5px] text-ink/55">THIS MONTH · {latestBar.name?.toUpperCase()}</span>
               {momChange != null && (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ color: momChange > 0 ? ACCENT : '#4E9E6A', background: momChange > 0 ? tint('#D9481C', 0.1) : tint('#4E9E6A', 0.12) }}>
+                  style={{ color: momChange > 0 ? ACCENT : GREEN, background: momChange > 0 ? tint('#D9481C', 0.1) : tint('#4E9E6A', 0.12) }}>
                   {momChange > 0 ? '↑' : '↓'} {Math.abs(momChange)}% vs {prevBar.name}
                 </span>
               )}
@@ -268,32 +276,38 @@ export default function Analytics() {
 
       {/* TRENDS — per category, month over month */}
       {tab === 'Trends' && (
-        <>
-          {/* Sticky header: stays put while the category list scrolls */}
-          <div className="sticky top-0 z-10 bg-paper pb-2">
-            <div className="flex items-center justify-between rule-ink pb-2 mb-2">
-              <span className="text-[11px] font-bold tracking-[1.5px] text-ink/55">BY CATEGORY</span>
+        trendMonths.length === 0 ? (
+          <Empty label="Add expenses to see trends" />
+        ) : (
+          <>
+            <p className="text-[13px] text-ink/50 -mt-2 mb-4">Category spend across the last {TREND_MONTHS} months.</p>
+            {shownTrends.length === 0
+              ? <p className="text-[13px] text-ink/45 py-6 text-center">No categories tracked — add one below.</p>
+              : shownTrends.map(t => <TrendRow key={t.cat.id} t={t} months={trendMonths} onRemove={() => untrackCat(t.cat.id)} />)}
+
+            <div className="text-[11px] font-bold tracking-[2px] text-ink/55 rule-ink pb-2 mt-6 mb-3">ADD A CATEGORY</div>
+            <div className="flex flex-wrap gap-2 pb-2">
+              {addable.map(c => (
+                <button key={c.id} onClick={() => trackCat(c.id)}
+                  className="flex items-center gap-1.5 pl-2 pr-3 py-2 rounded-full border border-ink/25 text-[12.5px] font-semibold active:scale-95 transition-transform">
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px]" style={{ background: tint(c.color, 0.18) }}>{c.icon}</span>
+                  {c.name}
+                </button>
+              ))}
+              {/* Create a brand-new category right here */}
               <button onClick={() => { setCatForm({ name: '', icon: '📦', color: '#D9481C' }); setShowAdd(true) }}
-                className="text-xs font-bold text-brand">+ Add category</button>
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12.5px] font-bold text-paper bg-ink active:scale-95 transition-transform">
+                ＋ New category
+              </button>
             </div>
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-ink/45">Spend per month · ↑↓ vs last month</p>
-              <div className="flex gap-[7px] text-[10px] font-bold text-ink/40">
-                {trendMonths.map(m => <span key={m.key} className="w-8 text-center">{m.label}</span>)}
-              </div>
-            </div>
-          </div>
-          {trendData.length === 0
-            ? <Empty label="Add a category to start tracking" />
-            : trendData.map(t => <TrendRow key={t.cat.id} t={t} onDelete={() => setDelCat(t.cat)} />)}
-          <p className="text-center text-[11px] text-ink/40 pt-4">Tap 🗑 to remove · add as many as you like</p>
-        </>
+          </>
+        )
       )}
 
       {/* REPORT */}
       {tab === 'Report' && <ReportTab report={report} categories={categories} />}
 
-      {/* Add category */}
+      {/* Create category */}
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="New category">
         <div className="px-6 py-4 pb-8">
           <div className="flex items-center gap-3.5 p-4 border border-ink/25 rounded-2xl mb-5">
@@ -330,59 +344,54 @@ export default function Analytics() {
               )
             })}
           </div>
-          <button onClick={saveCategory} className="w-full py-4 rounded-2xl bg-ink text-paper font-bold text-[15px] active:scale-[0.98]">Add category</button>
+          <button onClick={saveCategory} disabled={!catForm.name.trim()}
+            className="w-full py-4 rounded-2xl bg-ink text-paper font-bold text-[15px] active:scale-[0.98] disabled:opacity-40">Add category</button>
         </div>
       </Modal>
-
-      <ConfirmModal
-        isOpen={!!delCat} onClose={() => setDelCat(null)}
-        onConfirm={() => { if (delCat) deleteCategory(delCat.id); setDelCat(null) }}
-        title={`Remove ${delCat?.name || ''}?`}
-        message="This removes the category. Existing expenses under it stay recorded but will show as uncategorised."
-        confirmLabel="Remove" danger
-      />
     </div>
   )
 }
 
-function TrendRow({ t, onDelete }) {
-  const { cat, series, latest, change } = t
+// One category's trend: name + up/down delta + full-width monthly spark bars with month initials.
+function TrendRow({ t, months, onRemove }) {
+  const { cat, series, change } = t
   const max = Math.max(...series, 1)
   const up = change != null && change > 0
-  const badge = change == null
+  const delta = change == null
     ? { txt: 'new', color: 'rgba(27,23,16,.4)' }
     : change === 0
       ? { txt: '—', color: 'rgba(27,23,16,.35)' }
-      : { txt: `${up ? '↑' : '↓'} ${Math.abs(change)}%`, color: up ? ACCENT : '#4E9E6A' }
+      : { txt: `${up ? '↑' : '↓'} ${Math.abs(change)}%`, color: up ? ACCENT : GREEN }
 
   return (
-    <div className="flex items-center gap-3 py-3 rule-dot">
-      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center text-base shrink-0" style={{ background: tint(cat.color, 0.18) }}>{cat.icon}</div>
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-baseline">
-          <span className="text-sm font-semibold truncate">{cat.name}</span>
-          <div className="flex items-center gap-2 ml-2 whitespace-nowrap">
-            <span className="font-serif-n text-base">{formatCurrency(latest)}</span>
-            <button onClick={onDelete} aria-label={`Remove ${cat.name}`} className="text-[13px] opacity-35 active:opacity-70 p-0.5">🗑</button>
-          </div>
-        </div>
-        <div className="flex items-end justify-between mt-2">
-          <span className="text-[10.5px] font-bold shrink-0 pb-1" style={{ color: badge.color }}>{badge.txt}</span>
-          <div className="flex gap-[7px]">
-            {series.map((v, i) => {
-              const isLast = i === series.length - 1
-              return (
-                <div key={i} className="w-8 flex flex-col items-center gap-1" title={formatCurrency(v)}>
-                  <div className="h-6 w-full flex items-end">
-                    <div className="w-full rounded-t-[2px]"
-                      style={{ height: `${Math.max((v / max) * 100, v > 0 ? 10 : 3)}%`, background: isLast ? cat.color : tint(cat.color, 0.32) }} />
-                  </div>
-                  <span className="text-[8.5px] font-bold leading-none" style={{ color: v > 0 ? 'rgba(27,23,16,.55)' : 'rgba(27,23,16,.2)' }}>{compact(v)}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+    <div className="py-4 rule-dot">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-[9px] flex items-center justify-center text-[15px] shrink-0" style={{ background: tint(cat.color, 0.18) }}>{cat.icon}</div>
+        <span className="flex-1 text-[15px] font-bold truncate">{cat.name}</span>
+        <span className="text-[12px] font-bold whitespace-nowrap" style={{ color: delta.color }}>{delta.txt}</span>
+        <button onClick={onRemove} aria-label={`Stop tracking ${cat.name}`}
+          className="text-ink/35 text-xl leading-none px-1 -mr-1 active:opacity-60">×</button>
+      </div>
+      <div className="flex gap-1.5 mt-3">
+        {series.map((v, i) => {
+          const isLast = i === series.length - 1
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center" title={formatCurrency(v)}>
+              <span className="text-[9.5px] font-bold leading-none mb-1 h-[10px]" style={{ color: v > 0 ? 'rgba(27,23,16,.55)' : 'transparent' }}>{compact(v)}</span>
+              <div className="w-full flex items-end" style={{ height: 46 }}>
+                <div className="w-full" style={{ height: `${Math.max((v / max) * 100, v > 0 ? 8 : 2)}%`, background: isLast ? cat.color : tint(cat.color, 0.3), borderRadius: '4px 4px 0 0' }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex gap-1.5 mt-1.5">
+        {months.map((m, i) => (
+          <span key={m.key} className="flex-1 text-center text-[10px] font-bold"
+            style={{ color: i === months.length - 1 ? 'rgba(27,23,16,.6)' : 'rgba(27,23,16,.35)' }}>
+            {m.label[0].toUpperCase()}
+          </span>
+        ))}
       </div>
     </div>
   )

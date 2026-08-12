@@ -342,6 +342,16 @@ export function AppProvider({ children }) {
     return merged
   }, [])
 
+  // Persist a resolved brand-logo domain onto the holding so it's never looked up again
+  // (until the holding is deleted). '' means "resolved, no logo" — also cached, so we
+  // don't keep retrying. Skips the write if unchanged.
+  const saveHoldingLogo = useCallback(async (holding, domain) => {
+    if (holding.logoDomain === domain) return
+    const merged = { ...holding, logoDomain: domain }
+    await db.updateHolding(merged)
+    dispatch({ type: 'UPDATE_HOLDING', payload: merged })
+  }, [])
+
   // Apply any SIP installments that came due since the holding was last processed.
   // Each installment buys amount/NAV units at that month's NAV → averages in.
   // Runs on launch (can't run in background); catches up all missed months at once.
@@ -540,6 +550,7 @@ export function AppProvider({ children }) {
     deleteUdhaar,
     addHolding,
     updateHolding,
+    saveHoldingLogo,
     deleteHolding,
     addAsset,
     updateAsset,

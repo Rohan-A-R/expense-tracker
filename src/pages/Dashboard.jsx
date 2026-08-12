@@ -119,11 +119,11 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
       {/* Total spent */}
       <div className="pt-6 pb-1">
         <div className={LABEL}>Total spent</div>
-        <div className="font-serif-n text-[72px] leading-[1.02] tracking-[-1px]">{formatCurrency(stats.total)}</div>
+        <div className="font-serif-n text-[64px] leading-[1.02] tracking-[-1.5px]">{formatCurrency(stats.total)}</div>
       </div>
 
       {/* Stat row */}
-      <div className="flex border-t border-ink">
+      <div className="flex border-t border-ink" style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>
         {[
           { l: 'This week', v: formatCurrency(stats.weekTotal) },
           { l: 'Daily avg', v: formatCurrency(Math.round(stats.dailyAvg)) },
@@ -133,7 +133,7 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
             style={{
               paddingLeft: i === 0 ? 0 : 14,
               paddingRight: i === 2 ? 0 : 14,
-              borderRight: i < 2 ? '1px solid rgba(27,23,16,.25)' : 'none',
+              borderRight: i < 2 ? '1px dotted rgba(27,23,16,.32)' : 'none',
             }}>
             <div className="text-[10px] font-bold tracking-[1.5px] text-ink/55 truncate">{s.l.toUpperCase()}</div>
             <div className="font-serif-n text-2xl leading-tight truncate">{s.v}</div>
@@ -141,35 +141,35 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
         ))}
       </div>
 
-      {/* Udhaar balance strip — dismissible like a notification, returns after a week */}
+      {/* Udhaar balance strip — two cells (to collect / to pay), matches the stat-row language */}
       {showUdhaarStrip && (
-        <div className="flex items-center gap-2.5 py-3.5 border-t border-ink/25">
-          <span className="text-base">🤝</span>
-          <button onClick={onOpenUdhaar} className="flex-1 text-left min-w-0">
-            <span className="text-[13px] font-semibold">
-              {udhaarInfo.toCollect > 0 && (
-                <span style={{ color: '#4E9E6A' }}>{formatCurrency(udhaarInfo.toCollect)} to collect</span>
-              )}
-              {udhaarInfo.toCollect > 0 && udhaarInfo.toPay > 0 && <span className="text-ink/40"> · </span>}
-              {udhaarInfo.toPay > 0 && (
-                <span style={{ color: '#D9481C' }}>{formatCurrency(udhaarInfo.toPay)} to pay</span>
-              )}
-              {udhaarInfo.toCollect === 0 && udhaarInfo.toPay === 0 && (
-                <span>Open udhaar entries</span>
-              )}
-            </span>
-            {udhaarInfo.oldestDays >= 14 && (
-              <span className="block text-[11.5px] text-ink/45 font-medium">oldest pending {udhaarInfo.oldestDays} days</span>
+        <div className="flex items-center py-3" style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>
+          <button onClick={onOpenUdhaar} className="flex flex-1 min-w-0 text-left">
+            {udhaarInfo.toCollect > 0 && (
+              <div className="flex-1 min-w-0 pr-3.5">
+                <div className="text-[10px] font-bold tracking-[1.5px] text-ink/55">TO COLLECT</div>
+                <div className="font-serif-n text-2xl leading-tight" style={{ color: '#4E9E6A' }}>{formatCurrency(udhaarInfo.toCollect)}</div>
+              </div>
+            )}
+            {udhaarInfo.toPay > 0 && (
+              <div className="flex-1 min-w-0 pl-3.5"
+                style={udhaarInfo.toCollect > 0 ? { borderLeft: '1px dotted rgba(27,23,16,.32)' } : undefined}>
+                <div className="text-[10px] font-bold tracking-[1.5px] text-ink/55">TO PAY</div>
+                <div className="font-serif-n text-2xl leading-tight" style={{ color: '#D9481C' }}>{formatCurrency(udhaarInfo.toPay)}</div>
+              </div>
+            )}
+            {udhaarInfo.toCollect === 0 && udhaarInfo.toPay === 0 && (
+              <div className="flex-1 text-[13px] font-semibold py-1.5">Open udhaar entries</div>
             )}
           </button>
-          <button onClick={snoozeUdhaar} aria-label="Dismiss for a week"
-            className="w-7 h-7 rounded-lg border border-ink/20 text-ink/50 text-sm flex items-center justify-center active:scale-90">✕</button>
+          <button onClick={snoozeUdhaar} aria-label="Dismiss for a week" className="text-ink/45 text-lg px-2 leading-none active:opacity-60">×</button>
+          <button onClick={onOpenUdhaar} aria-label="Open udhaar" className="text-ink/45 text-lg px-1 leading-none active:opacity-60">→</button>
         </div>
       )}
 
       {/* Udhaar weekly nudge — only when nothing is tracked; snoozes for 7 days */}
       {showUdhaarNudge && (
-        <div className="flex items-center gap-2.5 py-3.5 border-t border-ink/25">
+        <div className="flex items-center gap-2.5 py-3.5" style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>
           <span className="text-base">🤝</span>
           <button onClick={onOpenUdhaar} className="flex-1 text-left">
             <span className="text-[13px] font-semibold">Lent or borrowed money lately?</span>

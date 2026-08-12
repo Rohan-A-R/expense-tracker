@@ -3,6 +3,9 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'rec
 import { useApp } from '../../context/AppContext'
 import { formatCurrency } from '../../utils/formatters'
 import { fetchStockChart, fetchMfSeries, fetchStockFundamentals, priceKey } from '../../services/marketData'
+import LogoMark from './LogoMark'
+import NewsList from './NewsList'
+import { mfDomain, newsQuery } from '../../utils/brands'
 
 const PAPER = '#F5F0E4', INK = '#1B1710'
 const GREEN_D = '#84C79B', RUST_D = '#F0844F'          // on-dark (chart card)
@@ -189,6 +192,11 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
         {/* header */}
         <div className="flex items-center gap-3 rule-2 pb-3">
           <button onClick={onBack} aria-label="Back" className="w-9 h-9 rounded-xl border-[1.5px] border-ink flex items-center justify-center text-lg active:scale-90">←</button>
+          <LogoMark
+            domain={h.logoDomain !== undefined ? (h.logoDomain || undefined) : (isMf ? mfDomain(h.name) : undefined)}
+            website={h.logoDomain === undefined && !isMf ? stats?.website : undefined}
+            query={h.logoDomain === undefined && !isMf ? h.name : undefined}
+            name={h.name} size={34} />
           <div className="flex-1 min-w-0">
             <div className="text-[15px] font-bold leading-tight truncate">{h.name}</div>
             <div className="text-[11px] font-bold text-ink/45 truncate">
@@ -332,6 +340,9 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
           </>
         )}
         {isMf && err && !stats && <p className="text-[12px] text-ink/45 py-2">Couldn't load live data — showing what's saved on your device.</p>}
+
+        {/* news for this holding */}
+        <NewsList query={newsQuery(h)} title="NEWS" count={5} />
 
         {/* remove */}
         <button onClick={() => onDelete(h)} className="w-full mt-7 py-3.5 rounded-2xl border-[1.5px] border-brand text-brand font-bold text-sm active:scale-[0.98]">

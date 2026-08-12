@@ -55,6 +55,72 @@ export async function searchStock(query) {
     .map(x => ({ symbol: x.symbol, name: x.shortname || x.longname || x.symbol }))
 }
 
+// ---- Brand logos: resolve a company/fund name → domain (Clearbit, keyless, CORS-open) ----
+export async function fetchDomainByName(name) {
+  if (!name) return null
+  return cachedDaily(`domain:${name}`, async () => {
+    try {
+      const d = await httpGet(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(name)}`)
+      return Array.isArray(d) && d[0]?.domain ? d[0].domain : null
+    } catch { return null }
+  })
+}
+
+// ---- News: Google News RSS (India), keyless. Native hits Google directly; the browser
+// goes through the Vite /gnews proxy (RSS has no CORS headers). Parsed to plain items. ----
+function parseRss(xml, count) {
+  const out = []
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'text/xml')
+    for (const n of doc.querySelectorAll('item')) {
+      if (out.length >= count) break
+      const source = n.querySelector('source')?.textContent?.trim() || ''
+      let title = (n.querySelector('title')?.textContent || '').trim()
+      if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3))
+      else title = title.replace(/\s-\s[^-]+$/, '')
+      const link = n.querySelector('link')?.textContent?.trim() || ''
+      const pub = n.querySelector('pubDate')?.textContent?.trim() || ''
+      if (title) out.push({ title, source, link, publishedAt: pub })
+    }
+  } catch { /* malformed feed → empty */ }
+  return out
+}
+
+export async function fetchNews(query, count = 6) {
+  if (!query) return []
+  return cachedDaily(`news:${query}`, async () => {
+    const url = Capacitor.isNativePlatform()
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`
+      : `/gnews?q=${encodeURIComponent(query)}`
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': YUA }, connectTimeout: 12000, readTimeout: 12000 })
+    const xml = typeof res.data === 'string' ? res.data : String(res.data || '')
+    return parseRss(xml, count)
+  })
+}
+
+// ---- Market pulse (index/FX ticker for the Portfolio page) ----
+const PULSE = [
+  { key: 'nifty', symbol: '^NSEI', label: 'NIFTY 50' },
+  { key: 'sensex', symbol: '^BSESN', label: 'SENSEX' },
+  { key: 'usdinr', symbol: 'INR=X', label: 'USD / INR' },
+]
+
+// Fetch the three market gauges in parallel. Each → { label, price, changePct }.
+// A failed one is dropped rather than failing the whole strip.
+export async function fetchMarketPulse() {
+  const out = await Promise.all(PULSE.map(async (p) => {
+    try {
+      const d = await httpGet(q(`/v8/finance/chart/${encodeURIComponent(p.symbol)}?interval=1d&range=5d`))
+      const m = d?.chart?.result?.[0]?.meta
+      const price = num(m?.regularMarketPrice)
+      const prev = num(m?.chartPreviousClose ?? m?.previousClose)
+      if (price == null) return null
+      return { key: p.key, label: p.label, price, changePct: prev ? ((price - prev) / prev) * 100 : null, isFx: p.key === 'usdinr' }
+    } catch { return null }
+  }))
+  return out.filter(Boolean)
+}
+
 // ---- Mutual funds (mfapi.in → AMFI daily NAV, free & official) ----
 export async function searchMf(q) {
   const d = await httpGet(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(q)}`)
@@ -139,6 +205,7 @@ async function _fetchStockFundamentals(symbol) {
     revenue: f(fd.totalRevenue), profitMargin: f(fd.profitMargins), roe: f(fd.returnOnEquity),
     debtToEquity: f(fd.debtToEquity), currentRatio: f(fd.currentRatio), revenueGrowth: f(fd.revenueGrowth),
     recommendation: fd.recommendationKey || null, targetMean: f(fd.targetMeanPrice),
+    website: ap.website || null,
     sector: ap.sector || null, industry: ap.industry || null,
     employees: ap.fullTimeEmployees ? Number(ap.fullTimeEmployees).toLocaleString('en-IN') : null,
     summary: ap.longBusinessSummary || null,

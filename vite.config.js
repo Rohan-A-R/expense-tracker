@@ -23,6 +23,15 @@ function yahooDevProxy() {
           res.end(await r.text())
         } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }
       })
+      // Google News RSS (India) — keyless headlines; XML has no CORS headers so proxy it.
+      server.middlewares.use('/gnews', async (req, res) => {
+        try {
+          const q = new URL(req.url, 'http://x').searchParams.get('q') || ''
+          const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`, { headers: { 'User-Agent': YUA } })
+          res.setHeader('content-type', 'application/xml')
+          res.end(await r.text())
+        } catch (e) { res.statusCode = 502; res.end(String(e)) }
+      })
     },
   }
 }
