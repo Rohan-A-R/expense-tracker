@@ -66,6 +66,23 @@ export async function fetchDomainByName(name) {
   })
 }
 
+const _hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, '') || null } catch { return null } }
+
+// Best logo domain for a *stock*. Yahoo's assetProfile.website is authoritative for
+// essentially every listed NSE/BSE company (obscure small-caps & PSUs included), where
+// Clearbit — a global-brand database — often has no match. So try Yahoo's official website
+// first, and only fall back to a Clearbit name lookup if Yahoo has no website on file.
+export async function fetchStockDomain(symbol, name) {
+  if (symbol) {
+    try {
+      const f = await fetchStockFundamentals(symbol)   // cachedDaily; reuses the detail-screen fetch
+      const dom = _hostOf(f?.website)
+      if (dom) return dom
+    } catch { /* fall through to Clearbit */ }
+  }
+  return fetchDomainByName(name)
+}
+
 // ---- News: Google News RSS (India), keyless. Native hits Google directly; the browser
 // goes through the Vite /gnews proxy (RSS has no CORS headers). Parsed to plain items. ----
 function parseRss(xml, count) {

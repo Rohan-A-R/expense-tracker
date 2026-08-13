@@ -345,9 +345,12 @@ export function AppProvider({ children }) {
   // Persist a resolved brand-logo domain onto the holding so it's never looked up again
   // (until the holding is deleted). '' means "resolved, no logo" — also cached, so we
   // don't keep retrying. Skips the write if unchanged.
-  const saveHoldingLogo = useCallback(async (holding, domain) => {
-    if (holding.logoDomain === domain) return
-    const merged = { ...holding, logoDomain: domain }
+  // `logoV` stamps which resolver version last touched this record, so a smarter
+  // resolver (e.g. Yahoo-website-first for stocks) can re-attempt holdings an older
+  // one left logo-less — exactly once — without re-hitting the network every open.
+  const saveHoldingLogo = useCallback(async (holding, domain, logoV = 2) => {
+    if (holding.logoDomain === domain && holding.logoV === logoV) return
+    const merged = { ...holding, logoDomain: domain, logoV }
     await db.updateHolding(merged)
     dispatch({ type: 'UPDATE_HOLDING', payload: merged })
   }, [])

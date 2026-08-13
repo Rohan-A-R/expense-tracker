@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../context/AppContext'
 import Modal, { ConfirmModal } from '../components/ui/Modal'
 import { formatCurrency } from '../utils/formatters'
-import { searchStock, searchMf, priceKey, fetchMarketPulse, fetchDomainByName } from '../services/marketData'
+import { searchStock, searchMf, priceKey, fetchMarketPulse, fetchStockDomain } from '../services/marketData'
 import HoldingDetail from '../components/portfolio/HoldingDetail'
 import LogoMark from '../components/portfolio/LogoMark'
 import NewsList from '../components/portfolio/NewsList'
@@ -46,9 +46,13 @@ export default function Portfolio({ onBack }) {
   // and it's cleaned up automatically when the holding is deleted. '' = resolved, no logo.
   useEffect(() => {
     holdings.forEach(h => {
-      if (h.logoDomain !== undefined) return
+      // Resolve if never resolved, OR if an earlier resolver (logoV < 2) left a stock
+      // logo-less — the Yahoo-website source now covers obscure small-caps/PSUs it missed.
+      const unresolved = h.logoDomain === undefined
+      const retryStock = h.kind !== 'mf' && h.logoDomain === '' && (h.logoV || 0) < 2
+      if (!unresolved && !retryStock) return
       if (h.kind === 'mf') saveHoldingLogo(h, mfDomain(h.name) || '')
-      else fetchDomainByName(h.name).then(d => saveHoldingLogo(h, d || '')).catch(() => {})
+      else fetchStockDomain(h.symbol, h.name).then(d => saveHoldingLogo(h, d || '')).catch(() => {})
     })
   }, [holdings, saveHoldingLogo])
 
