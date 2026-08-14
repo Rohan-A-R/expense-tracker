@@ -16,11 +16,9 @@ function tint(hex, a) {
 
 const LABEL = 'text-[10px] font-bold uppercase tracking-[1.5px] text-ink/55'
 
-export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends, onOpenAsk }) {
+export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends }) {
   const { expenses, categories, budgets, udhaar, holdings, prices } = useApp()
   const [editExpense, setEditExpense] = useState(null)
-  const [aiOn, setAiOn] = useState(false)
-  useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
 
   const activeMonth = useMemo(() => {
     const months = [...new Set(expenses.map(e => e.month))].sort((a, b) => b.localeCompare(a))
@@ -117,20 +115,6 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends,
           {activeMonth ? formatMonth(activeMonth).toUpperCase() : 'NO DATA'}
         </span>
       </div>
-
-      {/* Ask Finances — AI assistant entry (opt-in) */}
-      {aiOn && (
-        <button onClick={onOpenAsk}
-          className="flex items-center gap-3 w-full mt-4 px-4 py-3.5 rounded-2xl text-paper active:scale-[0.99]"
-          style={{ background: '#1B1710' }}>
-          <span className="text-lg">🪄</span>
-          <div className="flex-1 text-left">
-            <div className="text-sm font-bold">Ask Finances</div>
-            <div className="text-[11.5px]" style={{ color: 'rgba(245,240,228,.6)' }}>Anything about your money or the app</div>
-          </div>
-          <span className="text-lg" style={{ color: 'rgba(245,240,228,.5)' }}>→</span>
-        </button>
-      )}
 
       {/* Total spent */}
       <div className="pt-6 pb-1">

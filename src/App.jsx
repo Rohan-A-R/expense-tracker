@@ -30,6 +30,9 @@ function AppContent() {
   const [lock, setLock] = useState({ checked: false, hash: null, unlocked: false, biometric: false })
   const [showOnboard, setShowOnboard] = useState(false)
   const [showTour, setShowTour] = useState(false)
+  const [aiOn, setAiOn] = useState(false)
+
+  useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
 
   useEffect(() => {
     Promise.all([getSetting('appPin'), getSetting('appBiometric'), getSetting('lockOnboarded'), getSetting('tourDone')])
@@ -68,7 +71,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-paper max-w-lg mx-auto relative select-none text-ink">
       <main className="pb-24">
-        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} onOpenAsk={() => openSub('ask', 'dashboard')} />}
+        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} />}
         {page === 'expenses'  && <Expenses onBack={() => setPage(returnTo)} />}
         {page === 'analytics' && <Analytics />}
         {page === 'networth'  && <NetWorth onOpenPortfolio={() => openSub('portfolio', 'networth')} onOpenUdhaar={() => openSub('udhaar', 'networth')} />}
@@ -78,6 +81,18 @@ function AppContent() {
         {page === 'portfolio' && <Portfolio onBack={() => setPage(returnTo)} />}
         {page === 'ask'       && <AskFinances onBack={() => setPage(returnTo)} />}
       </main>
+
+      {/* Ask Finances FAB — matched pair stacked above the + (Home only, opt-in) */}
+      {aiOn && page === 'dashboard' && (
+        <button
+          onClick={() => openSub('ask', 'dashboard')}
+          aria-label="Ask Finances"
+          className="fixed bottom-[160px] right-5 z-30 w-14 h-14 rounded-[17px] flex items-center justify-center active:scale-90 transition-transform duration-100"
+          style={{ background: '#6C5FB0', boxShadow: '0 14px 28px -8px rgba(108,95,176,.5)' }}
+        >
+          <span className="text-[22px] leading-none">🪄</span>
+        </button>
+      )}
 
       {/* FAB — only on main tracking pages */}
       {!NO_FAB.includes(page) && (
