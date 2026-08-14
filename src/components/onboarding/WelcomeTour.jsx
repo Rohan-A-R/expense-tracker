@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import homeImg from '../../assets/tour/home.jpg'
+import askImg from '../../assets/tour/ask.jpg'
 import portfolioImg from '../../assets/tour/portfolio.jpg'
 import detailImg from '../../assets/tour/detail.jpg'
 import moneyImg from '../../assets/tour/money.jpg'
@@ -11,6 +12,7 @@ import udhaarImg from '../../assets/tour/udhaar.jpg'
 // how the app looks once it's full. Screenshots are regenerated if a screen is redesigned.
 const SLIDES = [
   { img: homeImg,      accent: '#D9481C', title: 'Everything at a glance',  body: "Your month's spend, budget, portfolio and dues — all on one home screen." },
+  { img: askImg,       accent: '#6C5FB0', title: 'Ask Finances anything',  body: 'Ask about your spending, budgets or how the app works — and get instant monthly recaps.' },
   { img: portfolioImg, accent: '#4E9E6A', title: 'Track your investments',  body: 'Stocks, mutual funds and SIPs with live prices, returns and allocation.' },
   { img: detailImg,    accent: '#B5761F', title: 'Deep-dive any holding',   body: 'Tap a stock or fund for its live chart, fundamentals, returns and latest news.' },
   { img: moneyImg,     accent: '#6C5FB0', title: 'Your whole net worth',    body: 'Metals, FDs, loans and investments in one number — with a trend that grows.' },

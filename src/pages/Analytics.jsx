@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
+import { getSetting } from '../services/db'
+import AiRecapCard from '../components/ai/AiRecapCard'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ReferenceLine } from 'recharts'
 import ReportTab from '../components/insights/ReportTab'
 import Modal from '../components/ui/Modal'
@@ -41,6 +43,8 @@ function ChartTooltip({ active, payload, label }) {
 export default function Analytics() {
   const { expenses, categories, budgets, monthStartDay, addCategory } = useApp()
   const [tab, setTab] = useState('Breakdown')
+  const [aiOn, setAiOn] = useState(false)
+  useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
   const [showAdd, setShowAdd] = useState(false)
   const [catForm, setCatForm] = useState({ name: '', icon: '📦', color: '#D9481C' })
 
@@ -154,6 +158,9 @@ export default function Analytics() {
           </select>
         )}
       </div>
+
+      {/* AI recap — opt-in, generates only on tap */}
+      {aiOn && <div className="mt-5"><AiRecapCard /></div>}
 
       {/* Tabs */}
       <div className="flex rule mt-4 mb-6">

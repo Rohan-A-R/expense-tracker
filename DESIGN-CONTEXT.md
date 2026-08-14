@@ -83,9 +83,16 @@ To collect / To pay summary (per-person netted); one card per person (owes-you g
 
 Stats grid (this month / all time / entries / categories); **Money** links (Net worth, Portfolio, Udhaar); **Preferences** — "Month starts on" (1–28, salary day), App lock (PIN), Fingerprint unlock (when a PIN is set and device supports it), Daily reminder (9 PM notification), Replay app tour; **Categories** manager (icon + color, add/edit/delete); **Backup & Data** — Export JSON, Export CSV, Import; **Clear sample data** (only when demo is loaded); **Reset all data** (confirm); footer shows "100% offline" and the installed **app version**.
 
+## Screen — Ask Finances (AI assistant, sub-page)
+
+Opened from a dark **"Ask Finances 🪄"** button on Home. A full-screen chat: starter-question chips, ink user bubbles (right) and bordered assistant bubbles (left), answers **stream in token-by-token** with a blinking cursor (bouncing dots before the first token). It answers questions about the user's own data ("how much on food?", "am I within budget?", "which stock is down most?") and how-to questions about the app. A matching **AI Recap** card on the Stats page writes a friendly monthly summary on tap.
+
+- **On by default** (toggle in Settings → Preferences). It's the one feature that sends data off-device — and only when the user taps Ask/Recap; the request carries a precomputed summary (aggregates + recent transactions), never raw everything.
+- **No API key in the app:** requests go through a Cloudflare Worker that holds the OpenRouter key and forwards to the model (`openai/gpt-oss-20b:free`). Every figure is computed on-device (JS) so the model only phrases, never calculates. See CLAUDE.md → "AI assistant" for the architecture.
+
 ## Onboarding & security
 
-- **Welcome tour** on first launch: 7 full-screen slides, each a real screenshot of the app filled with demo data (Home, Portfolio, **Holding detail**, Money, Breakdown, Trends, Udhaar), then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
+- **Welcome tour** on first launch: 8 full-screen slides, each a real screenshot of the app filled with demo data (Home, **Ask Finances**, Portfolio, Holding detail, Money, Breakdown, Trends, Udhaar), then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
 - **App lock:** 4-digit PIN + optional **fingerprint** (biometric) unlock; a first-launch prompt offers to set it up.
 - **In-app updates:** the app is sideloaded (not on Play Store), so on open it checks its GitHub **latest release** at most once per calendar day; when a newer version exists it shows a dismissible ink **update banner** ("Finances vX.Y.Z" + Download). Settings shows the installed **version footer**. Releasing = bump `version` in package.json, build the APK, and publish a GitHub release tagged `v<version>` with the APK attached.
 

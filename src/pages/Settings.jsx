@@ -27,6 +27,7 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
   const [catForm, setCatForm]     = useState({ name: '', icon: '📦', color: '#D9481C' })
   const [status, setStatus]       = useState('')
   const [reminderOn, setReminderOn] = useState(false)
+  const [aiOn, setAiOn] = useState(false)
   const [pinOn, setPinOn] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [pinForm, setPinForm] = useState({ pin: '', confirm: '' })
@@ -36,6 +37,7 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
 
   useEffect(() => {
     getSetting('dailyReminder').then(v => setReminderOn(!!v))
+    getSetting('aiEnabled').then(v => setAiOn(v !== false))   // on by default
     getSetting('appPin').then(v => setPinOn(!!v))
     getSetting('appBiometric').then(v => setBioOn(!!v))
     isBiometricAvailable().then(setBioAvailable)
@@ -80,6 +82,10 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
     }
   }
 
+
+  async function toggleAi() {
+    await setSetting('aiEnabled', !aiOn); setAiOn(!aiOn)
+  }
 
   async function handleImport(e) {
     const file = e.target.files?.[0]; if (!file) return
@@ -196,6 +202,14 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
           <div className="text-xs text-ink/50">"Did you log today's expenses?" at 9 PM</div>
         </div>
         <div onClick={toggleReminder} className={track(reminderOn)} style={trackStyle(reminderOn)}><div className={knob} /></div>
+      </div>
+      <div className="flex items-center gap-3.5 py-4 rule-dot">
+        <span className="text-lg">🪄</span>
+        <div className="flex-1">
+          <div className="text-sm font-semibold">AI features</div>
+          <div className="text-xs text-ink/50">Ask questions &amp; get recaps. Sends a summary of your data to the cloud only when used.</div>
+        </div>
+        <div onClick={toggleAi} className={track(aiOn)} style={trackStyle(aiOn)}><div className={knob} /></div>
       </div>
       <button onClick={onReplayTour} className="flex items-center gap-3.5 py-4 w-full text-left mb-6">
         <span className="text-lg">✨</span>

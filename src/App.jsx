@@ -16,10 +16,11 @@ import Settings from './pages/Settings'
 import Udhaar from './pages/Udhaar'
 import Portfolio from './pages/Portfolio'
 import NetWorth from './pages/NetWorth'
+import AskFinances from './pages/AskFinances'
 import ExpenseForm from './components/expenses/ExpenseForm'
 
-const SUB_PAGES = ['udhaar', 'portfolio', 'expenses']
-const NO_FAB = ['settings', 'udhaar', 'portfolio', 'networth']
+const SUB_PAGES = ['udhaar', 'portfolio', 'expenses', 'ask']
+const NO_FAB = ['settings', 'udhaar', 'portfolio', 'networth', 'ask']
 
 function AppContent() {
   const { loading, loadSampleData } = useApp()
@@ -67,7 +68,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-paper max-w-lg mx-auto relative select-none text-ink">
       <main className="pb-24">
-        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} />}
+        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} onOpenAsk={() => openSub('ask', 'dashboard')} />}
         {page === 'expenses'  && <Expenses onBack={() => setPage(returnTo)} />}
         {page === 'analytics' && <Analytics />}
         {page === 'networth'  && <NetWorth onOpenPortfolio={() => openSub('portfolio', 'networth')} onOpenUdhaar={() => openSub('udhaar', 'networth')} />}
@@ -75,6 +76,7 @@ function AppContent() {
         {page === 'settings'  && <Settings onOpenNetWorth={() => setPage('networth')} onOpenUdhaar={() => openSub('udhaar', 'settings')} onOpenPortfolio={() => openSub('portfolio', 'settings')} onReplayTour={() => setShowTour(true)} />}
         {page === 'udhaar'    && <Udhaar onBack={() => setPage(returnTo)} />}
         {page === 'portfolio' && <Portfolio onBack={() => setPage(returnTo)} />}
+        {page === 'ask'       && <AskFinances onBack={() => setPage(returnTo)} />}
       </main>
 
       {/* FAB — only on main tracking pages */}
