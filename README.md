@@ -62,6 +62,13 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 - **Net worth hub** — one number for everything you own and owe, with a **stock-app-style trend chart** (1M · 6M · 1Y · 5Y · ALL)
 - **Live-valued assets**: gold / silver / platinum by weight, **auto-compounding FDs**, **amortizing loans**
 
+### 🪄 Ask Finances (AI)
+- **Ask anything** — a chat assistant that answers questions about your money (*"Am I over budget?"*, *"How much on food this month?"*) or how the app works (*"How do I add a SIP?"*)
+- **AI Recap** — a one-tap friendly summary of your month on the Stats page
+- **Numbers stay honest** — every figure is computed on-device and handed to the model as a finished total, so it phrases and explains but never does the math
+- **No API key in the app** — requests go through a Cloudflare Worker proxy; the model provider key lives server-side
+- **Opt-in, on by default** — a data summary leaves the device *only* when you tap Ask or Recap; toggle it off anytime in Settings
+
 ### 🤝 Lend & borrow
 - **Udhaar ledger** — track who owes you and who you owe, netted per person, with settle-up and history
 
@@ -71,8 +78,8 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 - **Welcome tour** with a *"try with sample data"* demo mode that auto-clears after a day
 
 ### 🛡️ Private by design
-- **100% offline** — no accounts, no servers, no analytics
-- All data in **IndexedDB** on the device; the only network calls are optional market-price lookups
+- **Offline-first** — no accounts, no servers, no analytics
+- All data in **IndexedDB** on the device; network calls are limited to optional market-price lookups and — only when you use it — the AI assistant
 
 ---
 
@@ -86,6 +93,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 | Storage | IndexedDB via [`idb`](https://github.com/jakearchibald/idb) |
 | Mobile | Capacitor 6 (Android) |
 | Market data | Yahoo Finance (stocks/metals) · mfapi.in / AMFI (MF NAV) |
+| AI assistant | OpenRouter LLM via a Cloudflare Worker proxy (no key in the app) |
 | Biometrics | `@aparajita/capacitor-biometric-auth` |
 
 ---
@@ -139,6 +147,7 @@ Financial-month logic re-buckets every expense from its date, so changing your s
 ```
 src/
 ├── components/
+│   ├── ai/             # AI recap card
 │   ├── expenses/       # expense card + form
 │   ├── insights/       # Report tab
 │   ├── layout/         # bottom nav
@@ -146,9 +155,9 @@ src/
 │   ├── security/       # PIN + biometric lock
 │   └── ui/             # modal, etc.
 ├── context/AppContext.jsx   # global state + all actions
-├── pages/              # Dashboard, Expenses, Analytics, Budget,
-│                       # Settings, Portfolio, NetWorth, Udhaar
-├── services/           # db (IndexedDB), marketData, export, notifications, biometrics
+├── pages/              # Dashboard, Expenses, Analytics, Budget, Settings,
+│                       # Portfolio, NetWorth, Udhaar, AskFinances
+├── services/           # db (IndexedDB), marketData, aiClient, aiContext, export, notifications, biometrics
 └── utils/              # formatters, report, networth, demoData, sampleData
 ```
 
@@ -156,7 +165,9 @@ src/
 
 ## 🔐 Privacy
 
-No sign-up. No backend. No telemetry. The app makes network requests **only** to fetch live investment/metal prices, and only when you hold something priced. Your expenses, budgets, balances and PIN never leave your phone.
+No sign-up. No backend for your data. No telemetry. Your expenses, budgets, balances and PIN live in IndexedDB on your phone.
+
+The app makes network requests in just two cases: to fetch live investment/metal prices (only when you hold something priced), and — if you use the **Ask Finances / AI Recap** feature — to send a summary of your data (aggregates + recent transactions) to the AI assistant. The AI feature is clearly labelled in Settings and can be turned off; nothing is sent unless you tap Ask or Recap.
 
 ---
 
