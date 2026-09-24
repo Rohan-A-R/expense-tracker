@@ -14,13 +14,14 @@ const WORKER_URL = 'https://throbbing-base-fd72.rohanflash27.workers.dev/'
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 // ---- Buffered call (CapacitorHttp: works native + web since the Worker is CORS-open) ----
-async function completeOnce(prompt) {
+async function completeOnce(prompt, task) {
   const res = await CapacitorHttp.post({
     url: WORKER_URL,
     headers: { 'Content-Type': 'application/json' },
-    data: { prompt },
+    data: { prompt, task },
     connectTimeout: 15000,
-    readTimeout: 30000,
+    // Analysis prompts are far larger and the reply is a whole report — give it longer.
+    readTimeout: task === 'analysis' ? 90000 : 30000,
   })
   if (res.status >= 400) throw new Error(`AI ${res.status}`)
   const d = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
@@ -30,10 +31,10 @@ async function completeOnce(prompt) {
 }
 
 // Buffered + auto-retry. Free models flake (empty / timeout) — retry hides most of it.
-export async function aiComplete(prompt, { retries = 2 } = {}) {
+export async function aiComplete(prompt, { retries = 2, task = 'chat' } = {}) {
   let lastErr
   for (let attempt = 0; attempt <= retries; attempt++) {
-    try { return await completeOnce(prompt) }
+    try { return await completeOnce(prompt, task) }
     catch (e) { lastErr = e; if (attempt < retries) await sleep(500 * (attempt + 1)) }
   }
   throw lastErr
@@ -46,7 +47,7 @@ async function streamOnce(prompt, onDelta) {
   const resp = await fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, stream: true }),
+    body: JSON.stringify({ prompt, stream: true, task: 'chat' }),
   })
   if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`)
 

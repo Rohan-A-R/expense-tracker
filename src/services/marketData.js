@@ -193,6 +193,10 @@ async function ensureYahooAuth() {
   if (!_yCrumb || _yCrumb.length > 60) { _yCrumb = null; throw new Error('No crumb') }
 }
 
+// quoteSummary modules. The last three feed stock analysis: quarterly results, EPS vs
+// analyst estimates, and the next results / ex-dividend dates. (Mirrored in vite.config.js.)
+const YF_MODULES = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly'
+
 export async function fetchStockFundamentals(symbol) {
   return cachedDaily(`fund:${symbol}`, () => _fetchStockFundamentals(symbol))
 }
@@ -200,7 +204,7 @@ async function _fetchStockFundamentals(symbol) {
   let d
   if (Capacitor.isNativePlatform()) {
     await ensureYahooAuth()
-    const mods = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile'
+    const mods = YF_MODULES
     const url = `${YQ}/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}&crumb=${encodeURIComponent(_yCrumb)}`
     const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': YUA, Cookie: _yCookie }, connectTimeout: 12000, readTimeout: 12000 })
     if (res.status === 401) { _yCookie = null; _yCrumb = null; throw new Error('crumb expired') }
@@ -214,8 +218,28 @@ async function _fetchStockFundamentals(symbol) {
   if (!r) throw new Error('No data')
   const sd = r.summaryDetail || {}, ks = r.defaultKeyStatistics || {}, fd = r.financialData || {}, pr = r.price || {}, ap = r.assetProfile || {}
   const f = (x) => x?.fmt ?? null
+  const raw = (x) => num(x?.raw)
+
+  // Quarterly results, oldest → newest. Taken from incomeStatementHistoryQuarterly, whose
+  // endDate is the real quarter end (earnings.financialsChart labels quarters by calendar
+  // year — "2Q2026" — which reads wrong against India's April–March financial year).
+  const quarters = (r.incomeStatementHistoryQuarterly?.incomeStatementHistory || [])
+    .map(q => ({
+      end: q.endDate?.fmt || null,
+      revenue: raw(q.totalRevenue), netIncome: raw(q.netIncome),
+    }))
+    .filter(q => q.end && (q.revenue != null || q.netIncome != null))
+    .sort((a, b) => a.end.localeCompare(b.end))
+  const ec = r.earnings?.earningsChart || {}
+  const epsHistory = (ec.quarterly || []).map(q => ({
+    quarter: q.date || null, actual: raw(q.actual), estimate: raw(q.estimate),
+  })).filter(q => q.actual != null)
+  const ce = r.calendarEvents || {}
+  const nextEarnings = (ce.earnings?.earningsDate || ec.earningsDate || [])[0]?.fmt || null
+
   return {
     marketCap: f(pr.marketCap) || f(sd.marketCap),
+    marketCapRaw: num(pr.marketCap?.raw ?? sd.marketCap?.raw),   // raw value drives peer size-matching
     pe: f(sd.trailingPE), fwdPe: f(sd.forwardPE),
     eps: f(ks.trailingEps), bookValue: f(ks.bookValue), pb: f(ks.priceToBook),
     divYield: f(sd.dividendYield), beta: f(sd.beta),
@@ -226,7 +250,83 @@ async function _fetchStockFundamentals(symbol) {
     sector: ap.sector || null, industry: ap.industry || null,
     employees: ap.fullTimeEmployees ? Number(ap.fullTimeEmployees).toLocaleString('en-IN') : null,
     summary: ap.longBusinessSummary || null,
+    quarters, epsHistory, nextEarnings,
+    exDividend: ce.exDividendDate?.fmt || null,
   }
+}
+
+// ---- Industry peers (Yahoo screener) ----
+// Peers are discovered, never hardcoded. Yahoo's own "recommendedSymbols" endpoint is
+// useless for this — for TATASTEEL it returns Tata Motors, TCS and ICICI Bank ("people
+// also viewed"), not steel companies. The screener, filtered to region=in + the stock's
+// exact industry and sorted by market cap, gives the real competitor set.
+//
+// Size-matching is the point: Ujjivan Small Finance Bank and HDFC Bank share the industry
+// label "Banks—Regional", but HDFC is ~89x larger. Callers pick the market-cap
+// neighbours (see pickPeers in stockAnalysis.js) rather than the industry giants.
+export async function fetchIndustryPeers(industry) {
+  if (!industry) return []
+  return cachedDaily(`peers:${industry}`, async () => {
+    // Yahoo's own endpoints disagree on punctuation: assetProfile says "Banks - Regional"
+    // while the screener only matches "Banks—Regional" (em dash) and returns 0 for the
+    // hyphenated form. Try each spelling until one comes back non-empty.
+    const variants = [...new Set([
+      industry,
+      industry.replace(/\s+-\s+/g, '—'),   // " - " → em dash
+      industry.replace(/—/g, ' - '),       // em dash → " - "
+    ])]
+    for (const v of variants) {
+      try {
+        const rows = await _fetchIndustryPeers(v)
+        if (rows.length) return rows
+      } catch { /* try the next spelling */ }
+    }
+    return []
+  })
+}
+async function _fetchIndustryPeers(industry) {
+  const body = {
+    size: 250, offset: 0,
+    sortField: 'intradaymarketcap', sortType: 'desc', quoteType: 'equity',
+    query: {
+      operator: 'and',
+      operands: [
+        { operator: 'eq', operands: ['region', 'in'] },
+        { operator: 'eq', operands: ['industry', industry] },
+      ],
+    },
+  }
+  let d
+  if (Capacitor.isNativePlatform()) {
+    await ensureYahooAuth()
+    const res = await CapacitorHttp.post({
+      url: `${YQ}/v1/finance/screener?crumb=${encodeURIComponent(_yCrumb)}`,
+      headers: { 'User-Agent': YUA, Cookie: _yCookie, 'Content-Type': 'application/json' },
+      data: body, connectTimeout: 12000, readTimeout: 12000,
+    })
+    if (res.status === 401) { _yCookie = null; _yCrumb = null; throw new Error('crumb expired') }
+    if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    d = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+  } else {
+    const res = await CapacitorHttp.post({
+      url: '/yahoo-screener', headers: { 'Content-Type': 'application/json' },
+      data: body, connectTimeout: 12000, readTimeout: 12000,
+    })
+    if (res.status >= 400) throw new Error(`HTTP ${res.status}`)
+    d = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+  }
+  const quotes = d?.finance?.result?.[0]?.quotes || []
+  // Every company lists on both NSE and BSE — collapse to one row, preferring .NS.
+  const byBase = new Map()
+  for (const qt of quotes) {
+    const sym = qt.symbol
+    if (!sym) continue
+    const base = sym.replace(/\.(NS|BO)$/, '')
+    const prev = byBase.get(base)
+    if (prev && !sym.endsWith('.NS')) continue
+    byBase.set(base, { symbol: sym, name: qt.shortName || qt.longName || sym, marketCap: num(qt.marketCap) })
+  }
+  return [...byBase.values()].filter(x => x.marketCap).sort((a, b) => b.marketCap - a.marketCap)
 }
 
 // Yahoo range → granularity. Coarser bars for longer spans keep payloads small.
@@ -248,8 +348,18 @@ async function _fetchStockChart(symbol, rangeId = '6M') {
   const res = d?.chart?.result?.[0]
   if (!res) throw new Error('No chart')
   const ts = res.timestamp || []
-  const closes = res.indicators?.quote?.[0]?.close || []
-  const series = ts.map((t, i) => ({ t: t * 1000, close: num(closes[i]) })).filter(p => p.close != null)
+  const Q = res.indicators?.quote?.[0] || {}
+  const closes = Q.close || []
+  // open/high/low/volume ride along for technical analysis (ATR, swing pivots, volume
+  // spikes). Charts only read `t`/`close`, so this stays backward-compatible.
+  const series = ts.map((t, i) => ({
+    t: t * 1000,
+    close: num(closes[i]),
+    open: num(Q.open?.[i]), high: num(Q.high?.[i]), low: num(Q.low?.[i]),
+    volume: num(Q.volume?.[i]),
+  // Yahoo fills market holidays (and the not-yet-closed current bar) with 0 on indices
+  // and futures — `> 0` drops those, otherwise a trailing 0 reads as "price crashed to nil".
+  })).filter(p => p.close != null && p.close > 0)
   const m = res.meta || {}
   return {
     series,

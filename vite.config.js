@@ -17,8 +17,25 @@ function yahooDevProxy() {
           const c = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': YUA } })
           const cookie = (c.headers.get('set-cookie') || '').split(';')[0]
           const crumb = (await (await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'User-Agent': YUA, cookie } })).text()).trim()
-          const mods = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile'
+          // keep in sync with YF_MODULES in src/services/marketData.js
+          const mods = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly'
           const r = await fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}&crumb=${encodeURIComponent(crumb)}`, { headers: { 'User-Agent': YUA, cookie } })
+          res.setHeader('content-type', 'application/json')
+          res.end(await r.text())
+        } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }
+      })
+      // Stock screener (industry peers) — same cookie+crumb handshake, but a POST.
+      server.middlewares.use('/yahoo-screener', async (req, res) => {
+        try {
+          const body = await new Promise((ok, no) => {
+            let b = ''; req.on('data', c => { b += c }); req.on('end', () => ok(b)); req.on('error', no)
+          })
+          const c = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': YUA } })
+          const cookie = (c.headers.get('set-cookie') || '').split(';')[0]
+          const crumb = (await (await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'User-Agent': YUA, cookie } })).text()).trim()
+          const r = await fetch(`https://query1.finance.yahoo.com/v1/finance/screener?crumb=${encodeURIComponent(crumb)}`, {
+            method: 'POST', headers: { 'User-Agent': YUA, cookie, 'Content-Type': 'application/json' }, body,
+          })
           res.setHeader('content-type', 'application/json')
           res.end(await r.text())
         } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }

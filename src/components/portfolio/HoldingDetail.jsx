@@ -5,6 +5,8 @@ import { formatCurrency } from '../../utils/formatters'
 import { fetchStockChart, fetchMfSeries, fetchStockFundamentals, priceKey } from '../../services/marketData'
 import LogoMark from './LogoMark'
 import NewsList from './NewsList'
+import StockAnalysisCard from './StockAnalysisCard'
+import { getSetting } from '../../services/db'
 import { mfDomain, newsQuery } from '../../utils/brands'
 
 const PAPER = '#F5F0E4', INK = '#1B1710'
@@ -46,8 +48,18 @@ function ChartTip({ active, payload, isMf }) {
 }
 
 export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) {
-  const { prices } = useApp()
+  const { prices, holdings } = useApp()
   const isMf = h.kind === 'mf'
+
+  // The user's position, so the AI analysis can speak to *their* holding: size, cost and
+  // how much of the whole portfolio it represents (priced holdings only).
+  const position = useMemo(() => {
+    const portfolioValue = holdings.reduce((s, x) => {
+      const p = prices[priceKey(x)]
+      return p ? s + Number(x.qty) * p.price : s
+    }, 0)
+    return { qty: Number(h.qty), avgBuy: Number(h.avgBuy), portfolioValue: portfolioValue || null, holdingsCount: holdings.length }
+  }, [holdings, prices, h.qty, h.avgBuy])
   const [range, setRange] = useState('6M')
   const [stats, setStats] = useState(null)        // live meta (price + market stats)
   const [mfFull, setMfFull] = useState(null)       // full MF series (oldest-first)
@@ -55,6 +67,8 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(false)
   const [fund, setFund] = useState(null)          // stock fundamentals
+  const [aiOn, setAiOn] = useState(false)
+  useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
   const [fundState, setFundState] = useState('loading') // loading | ready | error
 
   // Stocks: fetch fundamentals once (native-only; degrades gracefully in browser)
@@ -339,6 +353,9 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
             {fund?.summary && <AboutSummary text={fund.summary} />}
           </>
         )}
+
+        {/* AI analysis — stocks only (the sector/peer/driver research has no MF equivalent) */}
+        {!isMf && aiOn && <StockAnalysisCard symbol={h.symbol} name={h.name} position={position} />}
 
         {/* news for this holding */}
         <NewsList query={newsQuery(h)} title="NEWS" count={5} />
