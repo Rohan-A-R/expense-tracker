@@ -67,6 +67,16 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 - **Net worth hub** — one number for everything you own and owe, with a **stock-app-style trend chart** (1M · 6M · 1Y · 5Y · ALL)
 - **Live-valued assets**: gold / silver / platinum by weight, **auto-compounding FDs**, **amortizing loans**
 
+### 🔬 AI stock analysis
+One tap on any stock holding produces a full research report — score (0–100), verdict (BUY / WATCH / AVOID), and plain-English sections — built from the stock **and its context**:
+- **Technicals**, computed on-device: RSI, MACD (and when it crossed), 20/50/200-day averages, Bollinger bands, ATR, swing-pivot support & resistance, returns, drawdown, volume spikes
+- **Sector-aware inputs** — each industry pulls what actually drives it: iron ore & steel futures for steel, NIFTY Bank & RBI news for banks, USD-INR & NASDAQ for IT, crude for oil & autos (19 industries mapped)
+- **Real competitors, size-matched** — peers are discovered live from the full list of listed companies in the same industry and picked by nearest market cap, so a small finance bank is compared with its equals, not with HDFC Bank
+- **Quarterly results** — revenue & profit trend, margins, EPS beats/misses vs estimates, next results date
+- **Dated news** — company, sector and geopolitical headlines, each with its age, so old news isn't read as current
+- **Your position** — your P&L, how much of your portfolio it is, and reference levels
+- Every number comes from the app, not the model — the AI only weighs it up and writes it. Research and education, not investment advice.
+
 ### 🪄 Ask Finances (AI)
 - **Ask anything** — a chat assistant that answers questions about your money (*"Am I over budget?"*, *"How much on food this month?"*) or how the app works (*"How do I add a SIP?"*)
 - **AI Recap** — a one-tap friendly summary of your month on the Stats page
@@ -84,7 +94,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 
 ### 🛡️ Private by design
 - **Offline-first** — no accounts, no servers, no analytics
-- All data in **IndexedDB** on the device; network calls are limited to optional market-price lookups and — only when you use it — the AI assistant
+- All data in **IndexedDB** on the device; network calls are limited to market prices & news and — only when you use them — the AI features
 
 ---
 
@@ -98,7 +108,8 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 | Storage | IndexedDB via [`idb`](https://github.com/jakearchibald/idb) |
 | Mobile | Capacitor 6 (Android) |
 | Market data | Yahoo Finance (stocks/metals) · mfapi.in / AMFI (MF NAV) |
-| AI assistant | OpenRouter LLM via a Cloudflare Worker proxy (no key in the app) |
+| AI | DeepSeek V4 Flash via OpenRouter, behind a Cloudflare Worker proxy (no key in the app) |
+| News | Google News RSS (India) |
 | Biometrics | `@aparajita/capacitor-biometric-auth` |
 
 ---
@@ -157,13 +168,17 @@ src/
 │   ├── insights/       # Report tab
 │   ├── layout/         # bottom nav
 │   ├── onboarding/     # welcome tour
+│   ├── portfolio/      # holding detail, news, AI stock-analysis card
 │   ├── security/       # PIN + biometric lock
 │   └── ui/             # modal, etc.
 ├── context/AppContext.jsx   # global state + all actions
 ├── pages/              # Dashboard, Expenses, Analytics, Budget, Settings,
 │                       # Portfolio, NetWorth, Udhaar, AskFinances
-├── services/           # db (IndexedDB), marketData, aiClient, aiContext, export, notifications, biometrics
-└── utils/              # formatters, report, networth, demoData, sampleData
+├── services/           # db (IndexedDB), marketData, aiClient, aiContext, stockAnalysis,
+│                       # sectorPlaybook, export, notifications, biometrics
+└── utils/              # formatters, report, networth, technicals, demoData, sampleData
+cloudflare-worker/      # AI proxy — holds the OpenRouter key server-side
+scripts/                # dev-only Playwright probes for the stock-analysis pipeline
 ```
 
 ---
@@ -172,7 +187,11 @@ src/
 
 No sign-up. No backend for your data. No telemetry. Your expenses, budgets, balances and PIN live in IndexedDB on your phone.
 
-The app makes network requests in just two cases: to fetch live investment/metal prices (only when you hold something priced), and — if you use the **Ask Finances / AI Recap** feature — to send a summary of your data (aggregates + recent transactions) to the AI assistant. The AI feature is clearly labelled in Settings and can be turned off; nothing is sent unless you tap Ask or Recap.
+The app makes network requests in just a few cases: to fetch live investment/metal prices and market news (only when you hold something priced), and — if you use the AI features — to the AI assistant:
+- **Ask Finances / AI Recap** send a summary of your data (aggregates + recent transactions).
+- **Stock analysis** sends public market data for that stock plus your position in it (quantity, average cost, share of portfolio) — nothing about your spending.
+
+All AI features are clearly labelled in Settings and can be turned off; nothing is sent unless you tap Ask, Recap or Analyse.
 
 ---
 

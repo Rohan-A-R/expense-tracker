@@ -207,7 +207,7 @@ export default function Settings({ onOpenNetWorth, onOpenUdhaar, onOpenPortfolio
         <span className="text-lg">🪄</span>
         <div className="flex-1">
           <div className="text-sm font-semibold">AI features</div>
-          <div className="text-xs text-ink/50">Ask questions &amp; get recaps. Sends a summary of your data to the cloud only when used.</div>
+          <div className="text-xs text-ink/50">Ask questions, monthly recaps &amp; stock analysis. Sends data to the cloud only when you use them.</div>
         </div>
         <div onClick={toggleAi} className={track(aiOn)} style={trackStyle(aiOn)}><div className={knob} /></div>
       </div>
