@@ -39,7 +39,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
   </tr>
   <tr>
     <td align="center"><img src="docs/frames/ask.png" width="215"/><br/><b>Ask Finances 🪄</b><br/><sub>AI: your money & the app</sub></td>
-    <td></td>
+    <td align="center"><img src="docs/frames/analysis.png" width="215"/><br/><b>Stock analysis 🔬</b><br/><sub>Sector, peers, results & news</sub></td>
     <td></td>
   </tr>
 </table>
