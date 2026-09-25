@@ -355,7 +355,8 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
         )}
 
         {/* AI analysis — stocks only (the sector/peer/driver research has no MF equivalent) */}
-        {!isMf && aiOn && <StockAnalysisCard symbol={h.symbol} name={h.name} position={position} />}
+        {!isMf && aiOn && <StockAnalysisCard symbol={h.symbol} name={h.name} position={position}
+          currentPrice={stats?.price ?? prices[priceKey(h)]?.price ?? null} />}
 
         {/* news for this holding */}
         <NewsList query={newsQuery(h)} title="NEWS" count={5} />
