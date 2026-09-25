@@ -81,7 +81,9 @@ On-demand research report on a stock holding — "🔬 Analyse" on `HoldingDetai
 6. **Format** — `formatContext` → labelled plain text; anything missing is written as "not available" so the model sees the gap.
 7. **Model** — `analysisPrompt` = strict rules (use only given data, never calculate, compare to size-matched peers, weight news by age, position levels are references not instructions, not advice) + JSON schema. `parseReport` tolerates fences/prose and clamps score/verdict.
 
-Same rule as the chat: **figures on screen come from `context`, never from the model's text.** Reports are cached per symbol in memory for the session.
+Same rule as the chat: **figures on screen come from `context`, never from the model's text.**
+
+**Persistence (`src/services/analysisStore.js`):** one `settings` key, `stockAnalyses` → `{ [symbol]: { latest, history } }` (no DB bump). `latest` is the full report plus a slim `meta` (price, position, source counts) — the raw peer/driver price series are deliberately not stored. It's shown for **7 days** (`REPORT_TTL_MS`), then the card falls back to the Analyse button with "Last analysed …". `history` is the **track record** ("Past calls"): `{ at, price, score, verdict, headline }`, newest first, capped at 24, and a same-day refresh replaces that day's entry. The card compares each call's price with today's; calls under a day old show "today" instead of a move.
 
 `scripts/` holds dev-only Playwright probes: `probe-analysis.mjs <SYMBOL> [name]` prints the full assembled context (no AI), `probe-full.mjs <SYMBOL>` also calls the Worker and prints the raw reply, `shot-analysis.mjs <out.png>` screenshots the rendered report with a stubbed model reply. Run them from the repo root with `npm run dev` up (playwright must resolve from the project's `node_modules`).
 

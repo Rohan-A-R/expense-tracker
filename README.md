@@ -75,6 +75,7 @@ One tap on any stock holding produces a full research report — score (0–100)
 - **Quarterly results** — revenue & profit trend, margins, EPS beats/misses vs estimates, next results date
 - **Dated news** — company, sector and geopolitical headlines, each with its age, so old news isn't read as current
 - **Your position** — your P&L, how much of your portfolio it is, and reference levels
+- **Saved for a week, with a track record** — reopen a stock and the report is still there; every call is logged with its price, so you can see how past verdicts actually played out
 - Every number comes from the app, not the model — the AI only weighs it up and writes it. Research and education, not investment advice.
 
 ### 🪄 Ask Finances (AI)
