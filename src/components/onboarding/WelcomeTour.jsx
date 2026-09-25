@@ -6,7 +6,7 @@ import detailImg from '../../assets/tour/detail.jpg'
 import moneyImg from '../../assets/tour/money.jpg'
 import breakdownImg from '../../assets/tour/breakdown.jpg'
 import trendsImg from '../../assets/tour/trends.jpg'
-import udhaarImg from '../../assets/tour/udhaar.jpg'
+import analysisImg from '../../assets/tour/analysis.jpg'
 
 // First-launch walkthrough — real app screens (with demo data) so new users see
 // how the app looks once it's full. Screenshots are regenerated if a screen is redesigned.
@@ -15,11 +15,10 @@ const SLIDES = [
   { img: askImg,       accent: '#6C5FB0', title: 'Ask Finances anything',  body: 'Ask about your spending, budgets or how the app works — and get instant monthly recaps.' },
   { img: portfolioImg, accent: '#4E9E6A', title: 'Track your investments',  body: 'Stocks, mutual funds and SIPs with live prices, returns and allocation.' },
   { img: detailImg,    accent: '#B5761F', title: 'Deep-dive any holding',   body: 'Tap a stock or fund for its live chart, fundamentals, returns and latest news.' },
+  { img: analysisImg,  accent: '#1B1710', title: 'A research note on demand', body: 'One tap weighs the sector, real competitors, quarterly results and news — and tracks how past calls played out.' },
   { img: moneyImg,     accent: '#6C5FB0', title: 'Your whole net worth',    body: 'Metals, FDs, loans and investments in one number — with a trend that grows.' },
   { img: breakdownImg, accent: '#C9972E', title: 'Where your money goes',   body: 'A clear category breakdown for every month.' },
-  { img: trendsImg,    accent: '#3E7CA6', title: 'Spot the trends',         body: 'Watch each category move, month over month.' },
-  { img: udhaarImg,    accent: '#3E9E9A', title: 'Never forget a debt',     body: 'Track who owes you and who you owe, person by person.' },
-]
+  { img: trendsImg,    accent: '#3E7CA6', title: 'Spot the trends',         body: 'Watch each category move, month over month.' },]
 
 export default function WelcomeTour({ onDone, onDemo }) {
   const [i, setI] = useState(0)

@@ -1,6 +1,8 @@
 import { chromium } from 'playwright'
 const CHROME = process.env.HOME + '/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome'
 const OUT = process.argv[2] || '/tmp/analysis.png'
+// optional: also write a welcome-tour slide (viewport-sized JPEG, report scrolled to top)
+const TOUR_OUT = process.argv[3] || null
 
 // Sample model reply — stands in for the Worker until OpenRouter credit exists.
 // Everything else on screen (position figures, data counts) is real, computed live.
@@ -10,7 +12,9 @@ const REPORT = {
   technicals: 'Price sits below both its 50- and 200-day averages, a bearish setup, though MACD turned bullish two days ago. RSI near 50 says momentum is neutral.',
   valuation: 'At a P/E of 21 it trades well above JSW (12.6) and SAIL (17.2), its closest peers by size, so it is not the bargain its falling price suggests.',
   earnings: 'Revenue jumped 58% last quarter but net profit fell 21% and margins halved to 3.8%. It has missed analyst estimates in 3 of the last 4 quarters. Next results are due 11 Nov 2026.',
-  position: 'Your holding is up 14.8% on your ₹165 average and makes up 15.8% of your portfolio — a sizeable single bet. The nearest support is ₹184.7, about 2.5% below the current price.',
+  // (kept free of exact P&L / weight figures — the stat row above shows those live, and a
+  //  hardcoded number here would visibly disagree with it on the tour slide)
+  position: 'Your holding is comfortably in profit, and at nearly a fifth of your portfolio it is one of your larger single bets. The nearest support sits just below the current price.',
   sector: 'Steel HRC futures are up 57% over the year while iron ore is down 7%, which should widen margins across the industry, and a 12% safeguard tariff shields domestic mills.',
   catalysts: ['12% safeguard tariff on Chinese steel imports', 'HRC steel futures up 57% over the year', 'Motilal Oswal sees a possible 20% rally'],
   risks: ['Missed EPS estimates 3 of the last 4 quarters', 'Net margin halved to 3.8%', 'P/E 21 vs JSW 12.6 — rich against peers'],
@@ -59,5 +63,18 @@ await page.getByText('Analyse this stock', { exact: true }).click()
 await page.waitForFunction(() => document.body.innerText.includes('RESULTS & EARNINGS'), null, { timeout: 120000 })
 await page.waitForTimeout(800)
 await card.screenshot({ path: OUT })
+if (TOUR_OUT) {
+  // The tour slide sells the *analysis*. The personal holding block (P&L row) is so
+  // prominent that on its own it reads as a P&L screen, so it's left out of the slide.
+  await card.evaluate(el => {
+    const h = [...el.querySelectorAll('div.mt-6')].find(d => d.innerText.includes('YOUR P&L'))
+    if (h) h.remove()
+  })
+  await page.setViewportSize({ width: 412, height: 892 })
+  await card.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 24))
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: TOUR_OUT, type: 'jpeg', quality: 84 })
+  console.log('tour slide', TOUR_OUT)
+}
 console.log('saved', OUT)
 await browser.close()

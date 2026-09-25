@@ -94,7 +94,7 @@ Opened from a dark **"Ask Finances 🪄"** button on Home. A full-screen chat: s
 
 ## Onboarding & security
 
-- **Welcome tour** on first launch: 8 full-screen slides, each a real screenshot of the app filled with demo data (Home, **Ask Finances**, Portfolio, Holding detail, Money, Breakdown, Trends, Udhaar), then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
+- **Welcome tour** on first launch: 8 full-screen slides, each a real screenshot of the app filled with demo data (Home, **Ask Finances**, Portfolio, Holding detail, **AI stock analysis**, Money, Breakdown, Trends), then a choice: **"Explore with sample data"** (loads a tagged demo dataset into the real app) or **"Start fresh"**. Replayable from Settings.
 - **App lock:** 4-digit PIN + optional **fingerprint** (biometric) unlock; a first-launch prompt offers to set it up.
 - **In-app updates:** the app is sideloaded (not on Play Store), so on open it checks its GitHub **latest release** at most once per calendar day; when a newer version exists it shows a dismissible ink **update banner** ("Finances vX.Y.Z" + Download). Settings shows the installed **version footer**. Releasing = bump `version` in package.json, build the APK, and publish a GitHub release tagged `v<version>` with the APK attached.
 
