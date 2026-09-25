@@ -34,6 +34,13 @@ await page.evaluate(async () => {
   await put('settings', { key: 'aiEnabled', value: true })
   await put('holdings', { id: 7001, kind: 'stock', symbol: 'TATASTEEL.NS', name: 'Tata Steel', qty: 50, avgBuy: 165 })
   await put('holdings', { id: 7002, kind: 'stock', symbol: 'INFY.NS', name: 'Infosys', qty: 40, avgBuy: 1200 })
+  const ago = (d) => new Date(Date.now() - d * 864e5).toISOString()
+  await put('settings', { key: 'stockAnalyses', value: { 'TATASTEEL.NS': {
+    latest: { generatedAt: ago(9), report: { score: 44, verdict: 'WATCH' }, meta: {} },
+    history: [
+      { at: ago(9), price: 176.2, score: 44, verdict: 'WATCH', headline: '' },
+      { at: ago(23), price: 168.9, score: 36, verdict: 'AVOID', headline: '' },
+    ] } } })
 })
 await page.reload({ waitUntil: 'networkidle' })
 await page.waitForTimeout(1500)
@@ -43,16 +50,14 @@ await page.waitForTimeout(1500)
 await page.getByText('Tata Steel').first().click()
 await page.waitForTimeout(2500)
 
-await page.getByText('🔬 Analyse this stock').click()
-await page.getByText('AI ANALYSIS').first().waitFor()
-await page.waitForFunction(() => document.body.innerText.includes('YOUR HOLDING'), null, { timeout: 120000 })
-await page.waitForTimeout(800)
+const card = page.locator('section', { hasText: 'AI ANALYSIS' }).first()
+await page.getByText('Analyse this stock', { exact: true }).waitFor()
+await card.scrollIntoViewIfNeeded()
+await card.screenshot({ path: OUT.replace('.png', '-idle.png') })
 
-// wait until the report (not the loader) is on screen
+await page.getByText('Analyse this stock', { exact: true }).click()
 await page.waitForFunction(() => document.body.innerText.includes('RESULTS & EARNINGS'), null, { timeout: 120000 })
 await page.waitForTimeout(800)
-console.log('has holding box:', await page.evaluate(() => document.body.innerText.includes('YOUR HOLDING')))
-const el = page.locator('div.mt-7', { hasText: 'SCORE' }).first()
-await el.screenshot({ path: OUT })
+await card.screenshot({ path: OUT })
 console.log('saved', OUT)
 await browser.close()
