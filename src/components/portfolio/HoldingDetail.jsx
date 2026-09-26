@@ -1,18 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts'
+import { keyLevels } from '../../utils/technicals'
 import { useApp } from '../../context/AppContext'
 import { formatCurrency } from '../../utils/formatters'
 import { fetchStockChart, fetchMfSeries, fetchStockFundamentals, priceKey } from '../../services/marketData'
 import LogoMark from './LogoMark'
 import NewsList from './NewsList'
 import StockAnalysisCard from './StockAnalysisCard'
-import { getSetting } from '../../services/db'
+import { getSetting, setSetting } from '../../services/db'
 import { mfDomain, newsQuery } from '../../utils/brands'
 
 const PAPER = '#F5F0E4', INK = '#1B1710'
 const GREEN_D = '#84C79B', RUST_D = '#F0844F'          // on-dark (chart card)
 const GREEN = '#4E9E6A', RUST = '#D9481C'              // on-paper
 const RANGES = ['1M', '6M', '1Y', '5Y', 'MAX']
+// Support/resistance per timeframe, as charting tools do it — each range finds levels on its
+// own bars. k = bars either side a swing must beat (bigger on longer ranges, so 5Y counts
+// only turning points that held for weeks); maxDist = how far from price a level may sit
+// before it's too remote to be useful. MAX is left out: decades crush the levels to a sliver.
+const LEVEL_CFG = {
+  '1M': { k: 2, maxDist: 0.08 },   // ~21 daily bars
+  '6M': { k: 4, maxDist: 0.15 },  // daily
+  '1Y': { k: 5, maxDist: 0.20 },       // daily — same basis as the AI report
+  '5Y': { k: 4, maxDist: 0.35 },    // weekly bars
+}
+const LEVEL_RANGES = Object.keys(LEVEL_CFG)
 const RANGE_DAYS = { '1M': 30, '6M': 182, '1Y': 365, '5Y': 1825, MAX: null }
 
 const signed = (v) => `${v >= 0 ? '+' : '−'}${formatCurrency(Math.abs(v))}`
@@ -69,6 +81,30 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
   const [fund, setFund] = useState(null)          // stock fundamentals
   const [aiOn, setAiOn] = useState(false)
   useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
+
+  // Support & resistance lines — computed on-device from a year of daily bars (no AI).
+  // Always the 1Y series regardless of the selected range, so the levels don't jump around
+  // as you switch ranges. fetchStockChart is cached per day, so this shares the 1Y view's fetch.
+  const [showLevels, setShowLevels] = useState(true)
+  const [year, setYear] = useState(null)
+  useEffect(() => { getSetting('chartLevels').then(v => setShowLevels(v !== false)) }, [])   // on by default
+  useEffect(() => {
+    if (isMf) return
+    let off = false
+    fetchStockChart(h.symbol, '1Y').then(c => { if (!off) setYear(c) }).catch(() => {})
+    return () => { off = true }
+  }, [h.symbol, isMf])
+  const toggleLevels = () => { setSetting('chartLevels', !showLevels); setShowLevels(!showLevels) }
+  // One support + one resistance for the *selected* range, from that range's own bars
+  // (stockCache holds full OHLC per range). Tested levels (2+ touches) are preferred.
+  const chartLevels = useMemo(() => {
+    const cfg = LEVEL_CFG[range]
+    const bars = stockCache[range]
+    if (isMf || !cfg || !bars?.length) return null
+    const lv = keyLevels(bars, { k: cfg.k, maxDist: cfg.maxDist, price: stats?.price ?? undefined })
+    return lv.support || lv.resistance ? lv : null
+  }, [isMf, range, stockCache, stats?.price])
+  const levelsVisible = !isMf && showLevels && LEVEL_RANGES.includes(range) && !!chartLevels
   const [fundState, setFundState] = useState('loading') // loading | ready | error
 
   // Stocks: fetch fundamentals once (native-only; degrades gracefully in browser)
@@ -121,7 +157,14 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
 
   const cached = prices[priceKey(h)]
   const price = stats?.price ?? cached?.price ?? null
-  const prevClose = stats?.prevClose ?? cached?.prevClose ?? null
+  // Stocks: NOT stats.prevClose. `stats` is the selected range's chart meta, whose
+  // chartPreviousClose is the close before the *whole range* (a month / six months ago) —
+  // so "today" used to change as you tapped range pills. The daily quote in the price cache
+  // carries the real previous close; failing that, the previous bar of the 1Y series.
+  const yearPrev = year?.series?.length > 1 ? year.series[year.series.length - 2].close : null
+  const prevClose = isMf
+    ? (stats?.prevClose ?? cached?.prevClose ?? null)
+    : (cached?.prevClose ?? yearPrev ?? null)
 
   const invested = Number(h.qty) * Number(h.avgBuy)
   const current = price != null ? Number(h.qty) * price : null
@@ -238,13 +281,21 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
           </div>
 
           {/* range move */}
-          <div className="px-5 h-5 mt-2">
-            {rangeMove && (
+          <div className="px-5 h-5 mt-2 flex items-center justify-between">
+            {rangeMove ? (
               <span className="text-[12px] font-bold" style={{ color: line }}>
                 {rangeMove.diff >= 0 ? '▲' : '▼'} {signedPrice(rangeMove.diff)}
                 {rangeMove.pct != null ? ` (${rangeMove.diff >= 0 ? '+' : '−'}${Math.abs(rangeMove.pct).toFixed(1)}%)` : ''}
                 <span style={{ color: 'rgba(245,240,228,.4)' }}> · {range}</span>
               </span>
+            ) : <span />}
+            {/* support/resistance toggle — stocks only, and only where the levels apply */}
+            {!isMf && chartLevels && LEVEL_RANGES.includes(range) && (
+              <button onClick={toggleLevels} aria-pressed={showLevels}
+                className="text-[10px] font-bold tracking-[1.5px] active:opacity-60"
+                style={{ color: showLevels ? PAPER : 'rgba(245,240,228,.35)' }}>
+                LEVELS {showLevels ? 'ON' : 'OFF'}
+              </button>
             )}
           </div>
 
@@ -266,6 +317,18 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
                   <YAxis hide domain={['dataMin', 'dataMax']} />
                   <Tooltip content={<ChartTip isMf={isMf} />} cursor={{ stroke: 'rgba(245,240,228,.3)', strokeDasharray: '3 3' }} />
                   <Area type="monotone" dataKey="close" stroke={line} strokeWidth={2.4} fill="url(#hdTrend)" isAnimationActive={false} dot={false} />
+                  {/* Lines only — no text on the chart. The nearest levels always sit by the
+                      latest price, which is at the right edge, so any in-chart label lands on
+                      the price line. The values are printed in the key below the chart.
+                      extendDomain: on 1M a level can sit just outside the month's range. */}
+                  {levelsVisible && chartLevels.support && (
+                    <ReferenceLine y={chartLevels.support.price} ifOverflow="extendDomain" stroke={GREEN_D} strokeOpacity={0.8}
+                      strokeDasharray="4 4" strokeWidth={1} />
+                  )}
+                  {levelsVisible && chartLevels.resistance && (
+                    <ReferenceLine y={chartLevels.resistance.price} ifOverflow="extendDomain" stroke={RUST_D} strokeOpacity={0.8}
+                      strokeDasharray="4 4" strokeWidth={1} />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -277,6 +340,14 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
               </div>
             )}
           </div>
+
+          {/* level key — the values for the dashed lines above */}
+          {levelsVisible && (
+            <div className="flex items-center gap-5 px-5 mt-1.5 text-[11px] font-bold">
+              {chartLevels.support && <LevelKey color={GREEN_D} label="Support" level={chartLevels.support} />}
+              {chartLevels.resistance && <LevelKey color={RUST_D} label="Resistance" level={chartLevels.resistance} />}
+            </div>
+          )}
 
           {/* range pills */}
           <div className="flex gap-1.5 px-5 mt-1">
@@ -370,6 +441,21 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
         </p>
       </div>
     </div>
+  )
+}
+
+// One entry of the chart's level key: a dashed swatch matching the line, then the value.
+// "tested 3×" = how many swing highs/lows formed at this price — the more, the stronger.
+function LevelKey({ color, label, level }) {
+  return (
+    <span className="flex items-center gap-1.5 min-w-0">
+      <svg width="16" height="2" className="shrink-0" aria-hidden="true">
+        <line x1="0" y1="1" x2="16" y2="1" stroke={color} strokeWidth="1.5" strokeDasharray="4 3" />
+      </svg>
+      <span style={{ color: 'rgba(245,240,228,.5)' }}>{label}</span>
+      <span style={{ color }}>{fmtPrice(level.price)}</span>
+      {level.touches >= 2 && <span style={{ color: 'rgba(245,240,228,.4)' }}>{level.touches}×</span>}
+    </span>
   )
 }
 

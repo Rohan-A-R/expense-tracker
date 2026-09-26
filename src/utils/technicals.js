@@ -108,13 +108,25 @@ export function atr(series, period = 14) {
   return v
 }
 
-// ---- Support & resistance from swing pivots ----
-// A bar is a pivot high if it's the highest of the `k` bars either side (and vice versa).
-// Nearby pivots are then clustered so we report distinct *levels*, not 30 near-identical ones.
+// ---- Support & resistance — the way charting tools find them ----
+// 1. Swing pivots on the chart's OWN bars: a bar is a pivot high if it's the highest of the
+//    `k` bars either side (vice versa for lows). Callers raise `k` on longer timeframes, so
+//    a 5Y chart only counts turning points that held for weeks, not a one-day blip.
+// 2. Highs and lows are clustered TOGETHER. A broken ceiling often becomes the next floor
+//    ("role reversal"), so one horizontal level can be tested from either side — each test
+//    counts as a touch.
+// 3. The merge tolerance scales with volatility (ATR), not a fixed %: a sleepy large-cap and
+//    a jumpy small-cap need different ideas of "the same price".
+// 4. Every level carries its touch count and when it was last tested, so callers can prefer
+//    proven levels over one-offs (see keyLevels).
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
 export function levels(series, k = 5, price = null) {
   const rows = series.filter(p => p.high != null && p.low != null)
   if (rows.length < k * 2 + 1) return { support: [], resistance: [] }
-  const hi = [], lo = []
+  const p = price ?? last(rows).close
+
+  const pivots = []                                  // { v, i } — value and bar index
   for (let i = k; i < rows.length - k; i++) {
     let isHi = true, isLo = true
     for (let j = i - k; j <= i + k; j++) {
@@ -122,26 +134,44 @@ export function levels(series, k = 5, price = null) {
       if (rows[j].high >= rows[i].high) isHi = false
       if (rows[j].low <= rows[i].low) isLo = false
     }
-    if (isHi) hi.push(rows[i].high)
-    if (isLo) lo.push(rows[i].low)
+    if (isHi) pivots.push({ v: rows[i].high, i })
+    if (isLo) pivots.push({ v: rows[i].low, i })
   }
-  const p = price ?? last(rows).close
-  const cluster = (arr) => {
-    const sorted = [...arr].sort((a, b) => a - b)
-    const out = []
-    for (const v of sorted) {
-      const prev = out[out.length - 1]
-      // within 1.5% → same level; average them
-      if (prev && Math.abs(v - prev.v) / prev.v < 0.015) { prev.v = (prev.v * prev.n + v) / (prev.n + 1); prev.n++ }
-      else out.push({ v, n: 1 })
-    }
-    return out
+
+  const a = atr(rows, Math.min(14, rows.length - 1))
+  const tol = clamp(a && p ? (a / p) * 0.6 : 0.015, 0.006, 0.04)
+
+  const clusters = []
+  for (const pv of [...pivots].sort((x, y) => x.v - y.v)) {
+    const c = clusters[clusters.length - 1]
+    if (c && Math.abs(pv.v - c.v) / c.v < tol) {
+      c.v = (c.v * c.n + pv.v) / (c.n + 1); c.n++; c.lastI = Math.max(c.lastI, pv.i)
+    } else clusters.push({ v: pv.v, n: 1, lastI: pv.i })
   }
-  // strongest = touched most often; report the nearest few on each side
-  const sup = cluster(lo).filter(x => x.v < p).sort((a, b) => b.v - a.v).slice(0, 3)
-  const res = cluster(hi).filter(x => x.v > p).sort((a, b) => a.v - b.v).slice(0, 3)
-  const fmt = (x) => ({ price: r1(x.v), touches: x.n })
-  return { support: sup.map(fmt), resistance: res.map(fmt) }
+
+  const fmt = (x) => ({ price: r1(x.v), touches: x.n, barsAgo: rows.length - 1 - x.lastI })
+  // nearest first on each side
+  const sup = clusters.filter(x => x.v < p).sort((x, y) => y.v - x.v).slice(0, 4)
+  const res = clusters.filter(x => x.v > p).sort((x, y) => x.v - y.v).slice(0, 4)
+  return { support: sup.map(fmt), resistance: res.map(fmt), tolerancePct: r1(tol * 100) }
+}
+
+/**
+ * The one support and one resistance worth drawing, as a charting tool would pick them:
+ * within `maxDist` of price, prefer a level tested at least twice; among those, the nearest.
+ * Falls back to the nearest untested level only if no tested one is in range.
+ * @returns {{ support: {price,touches,barsAgo}|null, resistance: …|null }}
+ */
+export function keyLevels(series, { k = 5, maxDist = 0.15, price = null } = {}) {
+  const rows = series.filter(p => p.close != null)
+  const p = price ?? (rows.length ? last(rows).close : null)
+  if (!p) return { support: null, resistance: null }
+  const lv = levels(series, k, p)
+  const pick = (list) => {
+    const inRange = list.filter(x => Math.abs(x.price - p) / p <= maxDist)
+    return inRange.find(x => x.touches >= 2) || inRange[0] || null
+  }
+  return { support: pick(lv.support), resistance: pick(lv.resistance) }
 }
 
 // ---- Trailing returns ----
