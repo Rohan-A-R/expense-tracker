@@ -18,7 +18,7 @@ function yahooDevProxy() {
           const cookie = (c.headers.get('set-cookie') || '').split(';')[0]
           const crumb = (await (await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'User-Agent': YUA, cookie } })).text()).trim()
           // keep in sync with YF_MODULES in src/services/marketData.js
-          const mods = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly'
+          const mods = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly,recommendationTrend'
           const r = await fetch(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}&crumb=${encodeURIComponent(crumb)}`, { headers: { 'User-Agent': YUA, cookie } })
           res.setHeader('content-type', 'application/json')
           res.end(await r.text())

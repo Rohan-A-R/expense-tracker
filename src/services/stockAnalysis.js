@@ -292,6 +292,13 @@ export function formatContext(c) {
     P(`Revenue ${n(f.revenue)} · Revenue growth ${n(f.revenueGrowth)} · Profit margin ${n(f.profitMargin)} · ROE ${n(f.roe)}`)
     P(`Debt/Equity ${n(f.debtToEquity)} · Current ratio ${n(f.currentRatio)}`)
     P(`Analyst consensus: ${n(f.recommendation)} · mean target ${n(f.targetMean)}`)
+    if (f.targetMeanRaw && c.price) {
+      const up = ((f.targetMeanRaw - c.price) / c.price) * 100
+      P(`Upside to mean target: ${pct(Number(up.toFixed(1)))} · target range ${money(f.targetLow)}–${money(f.targetHigh)} · ${f.analystCount ?? NA} analysts`)
+    }
+    const nowR = f.ratings?.find(r => r.period === '0m'), prevR = f.ratings?.find(r => r.period === '-3m')
+    const split = r => `${r.strongBuy + r.buy} buy · ${r.hold} hold · ${r.sell + r.strongSell} sell`
+    if (nowR) P(`Broker ratings now: ${split(nowR)}${prevR ? ` (3 months ago: ${split(prevR)})` : ''}`)
     if (f.employees) P(`Employees: ${f.employees}`)
   }
   P()
@@ -383,6 +390,9 @@ HARD RULES
 - Weight news by its age. A headline weeks old is context, not something happening now.
 - Quarterly results matter: say plainly whether revenue and profit are growing or shrinking,
   and whether the company has been beating or missing analyst estimates.
+- Broker ratings and targets are one input, not the answer. Mention the split, the upside to
+  the mean target and whether opinion is improving, but form your own view from the data —
+  and note it when the brokers' optimism clashes with falling profits or missed estimates.
 - If YOUR POSITION shows the reader owns the stock, speak to them directly ("your holding").
   Describe their gain/loss and how concentrated they are. The 2×ATR and support figures are
   REFERENCE levels to mention, never an instruction to sell or buy.

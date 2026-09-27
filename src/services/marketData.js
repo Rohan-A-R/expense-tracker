@@ -195,7 +195,7 @@ async function ensureYahooAuth() {
 
 // quoteSummary modules. The last three feed stock analysis: quarterly results, EPS vs
 // analyst estimates, and the next results / ex-dividend dates. (Mirrored in vite.config.js.)
-const YF_MODULES = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly'
+const YF_MODULES = 'summaryDetail,defaultKeyStatistics,financialData,price,assetProfile,earnings,calendarEvents,incomeStatementHistoryQuarterly,recommendationTrend'
 
 export async function fetchStockFundamentals(symbol) {
   return cachedDaily(`fund:${symbol}`, () => _fetchStockFundamentals(symbol))
@@ -246,6 +246,13 @@ async function _fetchStockFundamentals(symbol) {
     revenue: f(fd.totalRevenue), profitMargin: f(fd.profitMargins), roe: f(fd.returnOnEquity),
     debtToEquity: f(fd.debtToEquity), currentRatio: f(fd.currentRatio), revenueGrowth: f(fd.revenueGrowth),
     recommendation: fd.recommendationKey || null, targetMean: f(fd.targetMeanPrice),
+    targetMeanRaw: raw(fd.targetMeanPrice), targetHigh: raw(fd.targetHighPrice), targetLow: raw(fd.targetLowPrice),
+    analystCount: raw(fd.numberOfAnalystOpinions),
+    // Current month's rating split (period "0m"); older months show how opinion moved.
+    ratings: (r.recommendationTrend?.trend || []).map(t => ({
+      period: t.period, strongBuy: t.strongBuy ?? 0, buy: t.buy ?? 0, hold: t.hold ?? 0,
+      sell: t.sell ?? 0, strongSell: t.strongSell ?? 0,
+    })),
     website: ap.website || null,
     sector: ap.sector || null, industry: ap.industry || null,
     employees: ap.fullTimeEmployees ? Number(ap.fullTimeEmployees).toLocaleString('en-IN') : null,
