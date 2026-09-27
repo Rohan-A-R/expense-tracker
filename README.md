@@ -40,7 +40,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
   <tr>
     <td align="center"><img src="docs/frames/ask.png" width="215"/><br/><b>Ask Finances 🪄</b><br/><sub>AI: your money & the app</sub></td>
     <td align="center"><img src="docs/frames/analysis.png" width="215"/><br/><b>Stock analysis 🔬</b><br/><sub>Sector, peers, results & news</sub></td>
-    <td></td>
+    <td align="center"><img src="docs/frames/detail.png" width="215"/><br/><b>Holding detail</b><br/><sub>Chart, levels, your position</sub></td>
   </tr>
 </table>
 </div>
@@ -63,6 +63,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 
 ### 📈 Grow
 - **Portfolio** — add stocks & mutual funds, **live prices** (Yahoo Finance + AMFI NAV), weighted-average buy price, allocation split
+- **Holding detail** — live chart (1M · 6M · 1Y · 5Y · MAX) with automatic support & resistance per timeframe, your position, day & 52-week range bars, valuation, financials, and the **analyst view**: consensus, buy/hold/sell split and average target with upside
 - **Recurring SIPs** that auto-add units each month at that month's NAV
 - **Net worth hub** — one number for everything you own and owe, with a **stock-app-style trend chart** (1M · 6M · 1Y · 5Y · ALL)
 - **Live-valued assets**: gold / silver / platinum by weight, **auto-compounding FDs**, **amortizing loans**
