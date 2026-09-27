@@ -161,10 +161,17 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
   // chartPreviousClose is the close before the *whole range* (a month / six months ago) —
   // so "today" used to change as you tapped range pills. The daily quote in the price cache
   // carries the real previous close; failing that, the previous bar of the 1Y series.
+  // The previous close must come from the same source as the price. A live chart price paired
+  // with a stale cached quote (e.g. sample data left in the cache) showed Infosys "−37% today".
+  // So: live price → previous bar of the live 1Y series; the cache is only trusted when it is
+  // also where the price came from, or agrees with the live price.
   const yearPrev = year?.series?.length > 1 ? year.series[year.series.length - 2].close : null
+  const cacheMatches = cached?.price != null && price != null && Math.abs(cached.price - price) / price < 0.02
   const prevClose = isMf
     ? (stats?.prevClose ?? cached?.prevClose ?? null)
-    : (cached?.prevClose ?? yearPrev ?? null)
+    : stats?.price != null
+      ? (yearPrev ?? (cacheMatches ? cached.prevClose : null))
+      : (cached?.prevClose ?? null)
 
   const invested = Number(h.qty) * Number(h.avgBuy)
   const current = price != null ? Number(h.qty) * price : null
@@ -204,18 +211,14 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
     return out
   }, [isMf, mfFull])
 
-  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+  // labels kept short: VALUATION is a 4-across grid
   const fundamentals = fund && [
-    ['Market cap', fund.marketCap], ['P/E (TTM)', fund.pe], ['Forward P/E', fund.fwdPe],
-    ['EPS (TTM)', fund.eps], ['Book value', fund.bookValue], ['P/B ratio', fund.pb],
-    ['Dividend yield', fund.divYield], ['Beta', fund.beta],
+    ['Mkt cap', fund.marketCap], ['P/E', fund.pe], ['Fwd P/E', fund.fwdPe], ['P/B', fund.pb],
+    ['EPS', fund.eps], ['Book val.', fund.bookValue], ['Div yield', fund.divYield], ['Beta', fund.beta],
   ]
   const financials = fund && [
-    ['Revenue (TTM)', fund.revenue], ['Profit margin', fund.profitMargin], ['Return on equity', fund.roe],
-    ['Debt / equity', fund.debtToEquity], ['Current ratio', fund.currentRatio], ['Revenue growth', fund.revenueGrowth],
-  ]
-  const analysts = fund && [
-    ['Analyst view', cap(fund.recommendation)], ['Avg price target', fund.targetMean],
+    ['Revenue', fund.revenue], ['Rev. growth', fund.revenueGrowth], ['Profit margin', fund.profitMargin],
+    ['ROE', fund.roe], ['Debt / equity', fund.debtToEquity], ['Current ratio', fund.currentRatio],
   ]
   const about = fund && [
     ['Sector', fund.sector], ['Industry', fund.industry], ['Employees', fund.employees],
@@ -362,21 +365,30 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
               )
             })}
           </div>
-        </div>
-
-        {/* your holding */}
-        <div className="text-[11px] font-bold tracking-[2px] text-ink/55 rule-ink pb-2 mt-7 mb-1">YOUR HOLDING</div>
-        <div className="grid grid-cols-2 gap-x-4">
-          <Stat label={isMf ? 'Units' : 'Quantity'} value={isMf ? Number(h.qty).toFixed(3) : String(h.qty)} />
-          <Stat label={isMf ? 'Avg NAV' : 'Avg cost'} value={fmtPrice(h.avgBuy)} />
-          <Stat label="Invested" value={formatCurrency(invested)} />
-          <Stat label="Current value" value={current != null ? formatCurrency(current) : '—'} />
-          <Stat label="Total returns" value={pnl != null ? signed(pnl) : '—'}
-            sub={pnlPct != null ? `${pnl >= 0 ? '+' : '−'}${Math.abs(pnlPct).toFixed(2)}%` : null}
-            color={pnl == null ? undefined : pnl >= 0 ? GREEN : RUST} />
-          <Stat label="Today's change" value={dayChange != null ? signed(dayChange) : '—'}
-            sub={dayPct != null ? `${dayPct >= 0 ? '+' : '−'}${Math.abs(dayPct).toFixed(2)}%` : null}
-            color={dayChange == null ? undefined : dayChange >= 0 ? GREEN : RUST} />
+          {/* your holding — the bottom of the same card, below a hairline */}
+          <div className="mx-5 mt-4 pt-4 pb-2" style={{ borderTop: '1px solid rgba(245,240,228,.12)' }}>
+            <div className="flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold tracking-[1.5px]" style={{ color: 'rgba(245,240,228,.5)' }}>
+                  YOUR {isMf ? `${Number(h.qty).toFixed(3)} UNITS` : `${h.qty} ${Number(h.qty) === 1 ? 'SHARE' : 'SHARES'}`}
+                </div>
+                <div className="font-serif-n text-[30px] leading-none mt-1.5">{current != null ? formatCurrency(current) : '—'}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[10px] font-bold tracking-[1.5px]" style={{ color: 'rgba(245,240,228,.5)' }}>TOTAL RETURN</div>
+                <div className="font-serif-n text-[22px] leading-none mt-1.5" style={{ color: pnl == null ? PAPER : pnl >= 0 ? GREEN_D : RUST_D }}>
+                  {pnl != null ? signed(pnl) : '—'}
+                  {pnlPct != null && <span className="font-sans text-[12px] font-bold ml-1.5">{pnl >= 0 ? '+' : '−'}{Math.abs(pnlPct).toFixed(2)}%</span>}
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <DarkStat label={isMf ? 'AVG NAV' : 'AVG COST'} value={fmtPrice(h.avgBuy)} />
+              <DarkStat label="INVESTED" value={formatCurrency(invested)} />
+              <DarkStat label="TODAY" value={dayChange != null ? signed(dayChange) : '—'} align="right"
+                color={dayChange == null ? undefined : dayChange >= 0 ? GREEN_D : RUST_D} />
+            </div>
+          </div>
         </div>
 
         {/* MF: trailing returns */}
@@ -401,17 +413,20 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
         {isMf && <KVSection title="FUND INFO" rows={marketStats} />}
         {isMf && err && !stats && <p className="text-[12px] text-ink/45 py-2">Couldn't load live data — showing what's saved on your device.</p>}
 
-        {/* Stock: paired two-column stat sections */}
+        {/* Stock: full-width sections, each on an aligned grid (no ragged side-by-side columns) */}
         {!isMf && (
           <>
-            <div className="grid grid-cols-2 gap-x-5 items-start">
-              <ColSection title="PRICE STATS" rows={marketStats} />
-              <ColSection title="FUNDAMENTALS" rows={fundamentals} />
-            </div>
-            <div className="grid grid-cols-2 gap-x-5 items-start">
-              <ColSection title="FINANCIALS" rows={financials} />
-              <ColSection title="ANALYST VIEW" rows={analysts} />
-            </div>
+            <Heading>TRADING</Heading>
+            {stats?.dayLow != null && <RangeBar label="Day range" low={stats.dayLow} high={stats.dayHigh} value={price} />}
+            {stats?.weekLow52 != null && <RangeBar label="52-week range" low={stats.weekLow52} high={stats.weekHigh52} value={price} />}
+            <StatGrid cols={3} rows={[
+              ['Prev close', fmtPrice(prevClose)], ['Volume', fmtVol(stats?.volume)], ['Exchange', stats?.exchange || '—'],
+            ]} />
+
+            {fundamentals && <><Heading>VALUATION</Heading><StatGrid cols={4} rows={fundamentals} /></>}
+            {financials && <><Heading>FINANCIALS</Heading><StatGrid cols={3} rows={financials} /></>}
+            {fund && <AnalystView fund={fund} price={price} />}
+
             {fundState === 'loading' && !fund && (
               <p className="text-[12px] text-ink/45 pt-5">Loading fundamentals…</p>
             )}
@@ -420,14 +435,20 @@ export default function HoldingDetail({ holding: h, onBack, onEdit, onDelete }) 
                 Fundamentals (P/E, financials, ownership) load in the installed app — Yahoo blocks them in the browser.
               </p>
             )}
-            {about && <KVSection title="ABOUT" rows={about} />}
-            {fund?.summary && <AboutSummary text={fund.summary} />}
           </>
         )}
 
         {/* AI analysis — stocks only (the sector/peer/driver research has no MF equivalent) */}
         {!isMf && aiOn && <StockAnalysisCard symbol={h.symbol} name={h.name} position={position}
           currentPrice={stats?.price ?? prices[priceKey(h)]?.price ?? null} />}
+
+        {!isMf && about && (
+          <>
+            <Heading>ABOUT</Heading>
+            <StatGrid cols={3} rows={about} />
+            {fund?.summary && <AboutSummary text={fund.summary} />}
+          </>
+        )}
 
         {/* news for this holding */}
         <NewsList query={newsQuery(h)} title="NEWS" count={5} />
@@ -478,20 +499,109 @@ function KVSection({ title, rows }) {
   )
 }
 
-// Narrow-column stat list (label stacked above value) — pairs two sections side by side.
-function ColSection({ title, rows }) {
-  const filled = (rows || []).filter(([, v]) => v != null && v !== '')
-  if (!filled.length) return null
+function DarkStat({ label, value, color, align }) {
   return (
-    <div className="mt-7">
-      <div className="text-[10.5px] font-bold tracking-[1.5px] text-ink/55 rule-ink pb-2 mb-1">{title}</div>
-      {filled.map(([k, v]) => (
-        <div key={k} className="py-2 rule-dot">
-          <div className="text-[10px] tracking-[0.5px] text-ink/45">{k}</div>
-          <div className="text-[13px] font-semibold leading-snug break-words">{v}</div>
+    <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}>
+      <div className="text-[9.5px] font-bold tracking-[1px]" style={{ color: 'rgba(245,240,228,.45)' }}>{label}</div>
+      <div className="text-[13.5px] font-semibold mt-1 truncate" style={{ color: color || PAPER }}>{value}</div>
+    </div>
+  )
+}
+
+function Heading({ children }) {
+  return <div className="text-[11px] font-bold tracking-[2px] text-ink/55 rule-ink pb-2 mt-8">{children}</div>
+}
+
+// Label-over-value cells on a fixed grid. Missing values show "—" rather than being dropped,
+// so the columns always line up; a hairline separates rows, not every cell.
+const GRID_COLS = { 3: 'grid-cols-3', 4: 'grid-cols-4' }
+function StatGrid({ rows, cols = 3, className = '' }) {
+  if (!rows?.length) return null
+  return (
+    <div className={`grid ${GRID_COLS[cols]} gap-x-3 ${className}`}>
+      {rows.map(([k, v], i) => (
+        <div key={k} className={`py-3 min-w-0 ${i >= cols ? 'border-t border-ink/8' : ''}`}>
+          <div className="text-[9.5px] font-bold tracking-[0.8px] text-ink/45 uppercase truncate">{k}</div>
+          <div className="text-[14px] font-semibold mt-1 leading-snug break-words">{v ?? '—'}</div>
         </div>
       ))}
     </div>
+  )
+}
+
+// Low–high bar with a marker at the current price — reads faster than two numbers.
+function RangeBar({ label, low, high, value }) {
+  const span = high - low
+  const pos = value != null && span > 0 ? Math.min(1, Math.max(0, (value - low) / span)) : null
+  return (
+    <div className="pt-3.5 pb-1">
+      <div className="text-[9.5px] font-bold tracking-[0.8px] text-ink/45 uppercase">{label}</div>
+      <div className="relative h-[5px] rounded-full bg-ink/10 mt-2.5">
+        {pos != null && (
+          <>
+            <div className="absolute inset-y-0 left-0 rounded-full bg-ink/25" style={{ width: `${pos * 100}%` }} />
+            <div className="absolute top-1/2 w-[11px] h-[11px] -mt-[5.5px] -ml-[5.5px] rounded-full bg-ink border-2 border-paper"
+              style={{ left: `${pos * 100}%` }} />
+          </>
+        )}
+      </div>
+      <div className="flex justify-between text-[11.5px] font-semibold mt-1.5">
+        <span>{fmtPrice(low)}</span><span>{fmtPrice(high)}</span>
+      </div>
+    </div>
+  )
+}
+
+// Broker consensus: rating, the buy/hold/sell split as one bar, and the mean target with its
+// upside and the analysts' low–high spread (marker = today's price).
+const WATCH = '#B5761F'
+function AnalystView({ fund, price }) {
+  const now = fund.ratings?.find(r => r.period === '0m')
+  const buy = now ? now.strongBuy + now.buy : 0, hold = now?.hold ?? 0, sell = now ? now.sell + now.strongSell : 0
+  const total = buy + hold + sell
+  const target = fund.targetMeanRaw
+  const up = target && price ? ((target - price) / price) * 100 : null
+  if (!fund.recommendation && !total && !target) return null
+  const rating = fund.recommendation ? fund.recommendation.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'
+  return (
+    <>
+      <Heading>ANALYST VIEW</Heading>
+      <div className="flex items-end justify-between gap-4 pt-3.5">
+        <div>
+          <div className="text-[9.5px] font-bold tracking-[0.8px] text-ink/45">CONSENSUS</div>
+          <div className="font-serif-n text-[26px] leading-none mt-1">{rating}</div>
+        </div>
+        {target != null && (
+          <div className="text-right">
+            <div className="text-[9.5px] font-bold tracking-[0.8px] text-ink/45">AVG TARGET</div>
+            <div className="font-serif-n text-[22px] leading-none mt-1">{fmtPrice(target)}</div>
+            {up != null && (
+              <div className="text-[11.5px] font-bold mt-1" style={{ color: up >= 0 ? GREEN : RUST }}>
+                {up >= 0 ? '+' : '−'}{Math.abs(up).toFixed(1)}% {up >= 0 ? 'upside' : 'downside'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {total > 0 && (
+        <div className="pt-4">
+          <div className="flex h-[6px] rounded-full overflow-hidden gap-[2px]">
+            {buy > 0 && <div style={{ flex: buy, background: GREEN }} />}
+            {hold > 0 && <div style={{ flex: hold, background: WATCH }} />}
+            {sell > 0 && <div style={{ flex: sell, background: RUST }} />}
+          </div>
+          <div className="flex justify-between text-[11.5px] font-semibold mt-1.5">
+            <span style={{ color: GREEN }}>{buy} Buy</span>
+            <span style={{ color: WATCH }}>{hold} Hold</span>
+            <span style={{ color: RUST }}>{sell} Sell</span>
+          </div>
+          <div className="text-[11px] text-ink/45 mt-1">{fund.analystCount ?? total} analysts</div>
+        </div>
+      )}
+      {fund.targetLow != null && fund.targetHigh != null && (
+        <RangeBar label="Target range · marker is today's price" low={fund.targetLow} high={fund.targetHigh} value={price} />
+      )}
+    </>
   )
 }
 
@@ -511,12 +621,3 @@ function AboutSummary({ text }) {
   )
 }
 
-function Stat({ label, value, sub, color }) {
-  return (
-    <div className="py-3 rule-dot">
-      <div className="text-[10px] font-bold tracking-[1px] text-ink/45">{label.toUpperCase()}</div>
-      <div className="font-serif-n text-[19px] mt-0.5 leading-tight" style={color ? { color } : undefined}>{value}</div>
-      {sub && <div className="text-[11.5px] font-bold mt-0.5" style={color ? { color } : { color: 'rgba(27,23,16,.5)' }}>{sub}</div>}
-    </div>
-  )
-}
