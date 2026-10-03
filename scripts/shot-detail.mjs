@@ -39,14 +39,14 @@ if (FRAME_OUT) {
   // Same phone frame as the other docs/frames images: ink bezel, soft shadow, white ground.
   const fp = await (await browser.newContext({ viewport: { width: 340, height: 720 }, deviceScaleFactor: 2 })).newPage()
   const src = 'data:image/png;base64,' + first.toString('base64')
-  await fp.setContent(`<body style="margin:0;background:#fff;display:flex;align-items:center;justify-content:center;height:720px">
+  await fp.setContent(`<body style="margin:0;background:transparent;display:flex;align-items:center;justify-content:center;height:720px">
     <div style="width:281px;height:593px;border-radius:44px;background:#1B1710;padding:7px;box-sizing:border-box;
       box-shadow:0 24px 40px rgba(0,0,0,.18),0 6px 12px rgba(0,0,0,.08)">
       <div style="width:100%;height:100%;border-radius:37px;overflow:hidden;background:#F5F0E4">
         <img src="${src}" style="width:100%;display:block"/>
       </div></div></body>`)
   await fp.waitForTimeout(300)
-  await fp.screenshot({ path: FRAME_OUT })
+  await fp.screenshot({ path: FRAME_OUT, omitBackground: true })
   console.log('frame', FRAME_OUT)
 }
 await browser.close()
