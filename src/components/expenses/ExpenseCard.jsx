@@ -9,15 +9,33 @@ function tint(hex, a) {
   return `rgba(${r},${g},${b},${a})`
 }
 
-export default function ExpenseCard({ expense, onEdit }) {
+// variant "journal": Home's day-grouped list — name + payment, serif amount; no icon or
+// date (the day heading carries the date). Tap still opens Edit / Delete.
+export default function ExpenseCard({ expense, onEdit, variant }) {
   const { categories, deleteExpense } = useApp()
   const [expanded, setExpanded] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const cat = categories.find(c => c.id === expense.categoryId)
+  const journal = variant === 'journal'
 
   return (
     <>
       <div className="rule-dot">
+        {journal ? (
+          <div className="flex items-center gap-3 py-2.5 cursor-pointer" onClick={() => setExpanded(s => !s)}>
+            <div className="w-9 h-9 rounded-[11px] flex items-center justify-center text-[17px] flex-shrink-0"
+              style={{ background: tint(cat?.color, 0.18) }}>
+              {cat?.icon || '📦'}
+            </div>
+            <p className="flex-1 min-w-0 truncate">
+              <span className="text-[14.5px] font-semibold">{expense.description || cat?.name || 'Expense'}</span>
+              {expense.paymentType && (
+                <span className="text-[10.5px] tracking-[0.6px] uppercase text-ink/45 ml-1.5">{expense.paymentType}</span>
+              )}
+            </p>
+            <p className="font-serif-n text-[20px] leading-none flex-shrink-0">{formatCurrency(expense.amount)}</p>
+          </div>
+        ) : (
         <div
           className="flex items-center gap-3 py-3 cursor-pointer"
           onClick={() => setExpanded(s => !s)}
@@ -46,6 +64,7 @@ export default function ExpenseCard({ expense, onEdit }) {
 
           <p className="font-serif-n text-lg flex-shrink-0">−{formatCurrency(expense.amount)}</p>
         </div>
+        )}
 
         {expanded && (
           <div className="flex gap-2 pb-3 animate-fade-in">

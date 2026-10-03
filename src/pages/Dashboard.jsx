@@ -3,21 +3,15 @@ import { useApp } from '../context/AppContext'
 import { getSetting, setSetting } from '../services/db'
 import ExpenseCard from '../components/expenses/ExpenseCard'
 import ExpenseForm from '../components/expenses/ExpenseForm'
-import { formatCurrency, formatMonth, getWeekRange } from '../utils/formatters'
+import { formatCurrency, formatMonth, getWeekRange, currentFinMonth } from '../utils/formatters'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-const portfolioDark = (v) => v > 0 ? '#84C79B' : v < 0 ? '#F0844F' : '#F5F0E4'
+const DAY_MS = 24 * 60 * 60 * 1000
+const INK = '#1B1710', RUST = '#D9481C', GREEN = '#4E9E6A'
 
-function tint(hex, a) {
-  const h = (hex || '#A07C4E').replace('#', '')
-  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16)
-  return `rgba(${r},${g},${b},${a})`
-}
-
-const LABEL = 'text-[10px] font-bold uppercase tracking-[1.5px] text-ink/55'
 
 export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends }) {
-  const { expenses, categories, budgets, udhaar, holdings, prices } = useApp()
+  const { expenses, budgets, udhaar, holdings, prices, monthStartDay } = useApp()
   const [editExpense, setEditExpense] = useState(null)
 
   const activeMonth = useMemo(() => {
@@ -27,30 +21,61 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
 
   const { start: weekStart, end: weekEnd } = getWeekRange()
 
+  // Everything the hero says, from the financial month (which may start on payday, not the
+  // 1st): days gone and left, budget left and a safe daily spend, and how this month
+  // compares with the previous one *at the same point* — a full April against a part May
+  // would always read as "lighter".
   const stats = useMemo(() => {
-    if (!activeMonth) return { total: 0, weekTotal: 0, dailyAvg: 0, txCount: 0, topCat: null, topAmt: 0, budget: null, remaining: 0, pct: 0 }
+    const empty = { total: 0, weekTotal: 0, dailyAvg: 0, txCount: 0, budget: null, remaining: 0, pct: 0 }
+    if (!activeMonth) return empty
+    const sd = Math.max(1, Number(monthStartDay) || 1)
+    const [y, m] = activeMonth.split('-').map(Number)
+    const start = new Date(y, m - 1, sd), end = new Date(y, m, sd)
+    const totalDays = Math.round((end - start) / DAY_MS)
+    const isCurrent = activeMonth === currentFinMonth(sd)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const elapsed = isCurrent ? Math.min(totalDays, Math.floor((today - start) / DAY_MS) + 1) : totalDays
+    const daysLeft = isCurrent ? totalDays - elapsed + 1 : 0          // today included
+
     const monthExp = expenses.filter(e => e.month === activeMonth)
     const total = monthExp.reduce((s, e) => s + Number(e.amount), 0)
     const weekTotal = expenses.filter(e => e.date >= weekStart && e.date <= weekEnd).reduce((s, e) => s + Number(e.amount), 0)
-    const [y, m] = activeMonth.split('-').map(Number)
-    const now = new Date()
-    const isCurrentMonth = y === now.getFullYear() && m === (now.getMonth() + 1)
-    const daysElapsed = isCurrentMonth ? now.getDate() : new Date(y, m, 0).getDate()
-    const dailyAvg = daysElapsed > 0 ? total / daysElapsed : 0
-    const catTotals = {}
-    monthExp.forEach(e => { catTotals[e.categoryId] = (catTotals[e.categoryId] || 0) + Number(e.amount) })
-    const [topId, topAmt] = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0] || [null, 0]
-    const topCat = categories.find(c => c.id === Number(topId))
+
+    const prevKey = `${new Date(y, m - 2, 1).getFullYear()}-${String(new Date(y, m - 2, 1).getMonth() + 1).padStart(2, '0')}`
+    const prevCut = new Date(y, m - 2, sd + elapsed - 1)                // same day-of-period last month
+    const prevTotal = expenses
+      .filter(e => e.month === prevKey && new Date(e.date + 'T00:00:00') <= prevCut)
+      .reduce((s, e) => s + Number(e.amount), 0)
+    // Only from the second week: a few days in, one rent payment swings it by thousands of %.
+    const vsPrev = prevTotal > 0 && elapsed >= 7 ? ((total - prevTotal) / prevTotal) * 100 : null
+
     const budget = budgets['monthly']
-    const remaining = budget ? Math.max(budget.amount - total, 0) : 0
-    const pct = budget ? Math.min(Math.round((total / budget.amount) * 100), 100) : 0
-    return { total, weekTotal, dailyAvg, txCount: monthExp.length, topCat, topAmt, budget, remaining, pct }
-  }, [expenses, categories, budgets, activeMonth, weekStart, weekEnd])
+    const remaining = budget ? budget.amount - total : 0
+    return {
+      total, weekTotal, txCount: monthExp.length,
+      dailyAvg: elapsed > 0 ? total / elapsed : 0,
+      isCurrent, daysLeft, monthGonePct: Math.round((elapsed / totalDays) * 100),
+      vsPrev, prevName: new Date(y, m - 2, 1).toLocaleDateString('en-IN', { month: 'long' }),
+      budget, remaining,
+      pct: budget ? Math.min(Math.round((total / budget.amount) * 100), 100) : 0,
+      safePerDay: budget && daysLeft > 0 ? Math.max(remaining, 0) / daysLeft : null,
+    }
+  }, [expenses, budgets, activeMonth, monthStartDay, weekStart, weekEnd])
 
-  const recent = useMemo(() =>
-    [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8), [expenses])
+  // The journal: the latest spends grouped by day, each day headed with its full total.
+  const journal = useMemo(() => {
+    const recent = [...expenses].sort((a, b) => b.date.localeCompare(a.date) || (b.id - a.id)).slice(0, 8)
+    const dayTotal = {}
+    expenses.forEach(e => { dayTotal[e.date] = (dayTotal[e.date] || 0) + Number(e.amount) })
+    const groups = []
+    recent.forEach(e => {
+      const g = groups[groups.length - 1]
+      if (g && g.date === e.date) g.items.push(e)
+      else groups.push({ date: e.date, total: dayTotal[e.date], items: [e] })
+    })
+    return groups
+  }, [expenses])
 
-  const budgetColor = stats.pct >= 90 ? '#D9481C' : stats.pct >= 70 ? '#C77A1B' : '#1B1710'
 
   // Gross udhaar position — kept separate by direction. Collecting from one person
   // and owing another are independent, so we never net them into a single figure.
@@ -106,37 +131,56 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
     }
   }, [holdings, prices])
 
+  const today = new Date()
+  const pctTxt = (v) => `${Math.abs(v) < 1 ? Math.abs(v).toFixed(1) : Math.round(Math.abs(v))}%`
+  const up = (v) => v >= 0
+
   return (
-    <div className="min-h-screen px-6 pt-4">
-      {/* Header */}
+    <div className="min-h-screen px-6 pt-4 pb-6">
+      {/* Masthead — today's date; the month lives on the hero */}
       <div className="flex items-baseline justify-between rule-2 pb-3">
         <span className="font-serif-i text-[34px] leading-none">Finances</span>
         <span className="text-[11px] font-bold tracking-[2px] text-ink/60">
-          {activeMonth ? formatMonth(activeMonth).toUpperCase() : 'NO DATA'}
+          {today.toLocaleDateString('en-IN', { weekday: 'short' }).toUpperCase()} · {today.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase()}
         </span>
       </div>
 
-      {/* Total spent */}
-      <div className="pt-6 pb-1">
-        <div className={LABEL}>Total spent</div>
-        <div className="font-serif-n text-[64px] leading-[1.02] tracking-[-1.5px]">{formatCurrency(stats.total)}</div>
+      {/* Hero — the month in one number, then one sentence of context */}
+      <div className="pt-6">
+        <div className="text-[10.5px] font-bold tracking-[2px]" style={{ color: RUST }}>
+          SPENT IN {activeMonth ? formatMonth(activeMonth).split(' ')[0].toUpperCase() : 'THIS MONTH'}
+        </div>
+        <div className="flex items-baseline gap-1.5 mt-1">
+          <span className="font-serif-n text-[68px] leading-[.95] tracking-[-1.5px]">{formatCurrency(stats.total)}</span>
+          {stats.budget && <span className="font-serif-n text-[22px] text-ink/40">/ {Number(stats.budget.amount).toLocaleString('en-IN')}</span>}
+        </div>
+        <HeroLine stats={stats} pctTxt={pctTxt} up={up} />
       </div>
 
+      {/* Budget meter — spent so far against how much of the month has gone */}
+      {stats.budget && (
+        <div className="mt-5">
+          <div className="relative h-2.5" style={{ background: 'repeating-linear-gradient(90deg, rgba(27,23,16,.13) 0 2px, transparent 2px 6px)' }}>
+            <div className="absolute inset-y-0 left-0" style={{ width: `${stats.pct}%`, background: stats.pct >= 90 ? RUST : INK }} />
+            {stats.isCurrent && <div className="absolute -top-1.5 -bottom-1.5 w-[1.5px]" style={{ left: `${stats.monthGonePct}%`, background: RUST }} />}
+          </div>
+          <div className="flex justify-between text-[11px] font-bold mt-2 text-ink/55">
+            <span>{stats.pct}% used</span>
+            {stats.isCurrent && <span style={{ color: RUST }}>│ {stats.monthGonePct}% of month gone</span>}
+          </div>
+        </div>
+      )}
+
       {/* Stat row */}
-      <div className="flex border-t border-ink" style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>
+      <div className="grid grid-cols-3 border-t border-ink mt-5" style={{ borderBottom: '1px solid rgba(27,23,16,.15)' }}>
         {[
-          { l: 'This week', v: formatCurrency(stats.weekTotal) },
+          stats.safePerDay != null ? { l: 'Safe / day', v: formatCurrency(Math.round(stats.safePerDay)) } : { l: 'This week', v: formatCurrency(stats.weekTotal) },
           { l: 'Daily avg', v: formatCurrency(Math.round(stats.dailyAvg)) },
           { l: 'Entries', v: String(stats.txCount) },
-        ].map((s, i) => (
-          <div key={s.l} className="flex-1 py-3 min-w-0"
-            style={{
-              paddingLeft: i === 0 ? 0 : 14,
-              paddingRight: i === 2 ? 0 : 14,
-              borderRight: i < 2 ? '1px dotted rgba(27,23,16,.32)' : 'none',
-            }}>
-            <div className="text-[10px] font-bold tracking-[1.5px] text-ink/55 truncate">{s.l.toUpperCase()}</div>
-            <div className="font-serif-n text-2xl leading-tight truncate">{s.v}</div>
+        ].map((c, i) => (
+          <div key={c.l} className="py-3 min-w-0" style={i ? { borderLeft: '1px dotted rgba(27,23,16,.3)', paddingLeft: 12 } : undefined}>
+            <div className="text-[9.5px] font-bold tracking-[1.5px] text-ink/50 truncate">{c.l.toUpperCase()}</div>
+            <div className="font-serif-n text-[26px] leading-tight truncate">{c.v}</div>
           </div>
         ))}
       </div>
@@ -180,90 +224,102 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
         </div>
       )}
 
-      {/* Portfolio card — mini stock-app dashboard */}
-      {portfolio && portfolio.priced ? (
-        <button onClick={onOpenPortfolio} className="w-full text-left mt-3.5 rounded-2xl px-4 py-3 text-paper active:scale-[0.99] transition-transform" style={{ background: '#1B1710' }}>
-          <div className="flex items-center justify-between">
-            <span className="text-[9.5px] font-bold tracking-[1.5px]" style={{ color: 'rgba(245,240,228,.55)' }}>PORTFOLIO</span>
-            <span className="text-sm" style={{ color: 'rgba(245,240,228,.5)' }}>→</span>
-          </div>
-          <div className="flex items-end justify-between mt-0.5">
-            <span className="font-serif-n text-[23px] leading-none">{formatCurrency(portfolio.current)}</span>
-            <span className="text-[11.5px] font-bold" style={{ color: portfolioDark(portfolio.pnl) }}>
-              {portfolio.pnl >= 0 ? '+' : '−'}{formatCurrency(Math.abs(portfolio.pnl))}
-              {portfolio.pnlPct != null ? ` (${portfolio.pnl >= 0 ? '+' : '−'}${Math.abs(portfolio.pnlPct).toFixed(1)}%)` : ''}
-            </span>
-          </div>
-          {portfolio.dayPct != null && (
-            <div className="text-[10.5px] font-semibold mt-1" style={{ color: portfolioDark(portfolio.day) }}>
-              {portfolio.day >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(portfolio.day))} ({Math.abs(portfolio.dayPct).toFixed(2)}%) today
+      {/* Portfolio — a coloured card so it reads as a door into the Portfolio page */}
+      <button onClick={onOpenPortfolio}
+        className="w-full text-left mt-5 rounded-[20px] px-5 py-4 text-paper active:scale-[0.985] transition-transform relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #3E8A5C 0%, #2C6845 60%, #1F4D33 100%)', boxShadow: '0 12px 24px -10px rgba(44,104,69,.55)' }}>
+        <span className="absolute -right-10 -top-12 w-36 h-36 rounded-full" style={{ background: 'rgba(255,255,255,.07)' }} />
+        <div className="relative flex items-center justify-between">
+          <span className="text-[10px] font-bold tracking-[1.8px]" style={{ color: 'rgba(245,240,228,.7)' }}>PORTFOLIO</span>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(245,240,228,.16)' }}>View →</span>
+        </div>
+        {portfolio && portfolio.priced ? (
+          <div className="relative flex items-end justify-between mt-1.5 gap-3">
+            <span className="font-serif-n text-[30px] leading-none">{formatCurrency(portfolio.current)}</span>
+            <div className="text-right text-[12px] font-bold leading-[1.5]">
+              <div style={{ color: up(portfolio.pnl) ? '#BFE8CB' : '#FFC4A8' }}>
+                {up(portfolio.pnl) ? '+' : '−'}{formatCurrency(Math.abs(portfolio.pnl))}
+                {portfolio.pnlPct != null ? ` · ${up(portfolio.pnl) ? '+' : '−'}${Math.abs(portfolio.pnlPct).toFixed(1)}%` : ''}
+              </div>
+              {portfolio.dayPct != null && (
+                <div style={{ color: 'rgba(245,240,228,.75)' }}>
+                  today {up(portfolio.day) ? '+' : '−'}{formatCurrency(Math.abs(portfolio.day))}
+                </div>
+              )}
             </div>
-          )}
-        </button>
-      ) : (
-        <button onClick={onOpenPortfolio} className="w-full text-left mt-3.5 rounded-2xl px-4 py-3 text-paper active:scale-[0.99] transition-transform" style={{ background: '#1B1710' }}>
-          <div className="flex items-center justify-between">
-            <span className="text-[9.5px] font-bold tracking-[1.5px]" style={{ color: 'rgba(245,240,228,.55)' }}>PORTFOLIO</span>
-            <span className="text-sm" style={{ color: 'rgba(245,240,228,.5)' }}>→</span>
           </div>
-          <div className="text-[13.5px] font-semibold mt-1" style={{ color: 'rgba(245,240,228,.9)' }}>
+        ) : (
+          <div className="relative text-[14px] font-semibold mt-1.5">
             {portfolio ? 'Updating prices…' : 'Track your stocks & mutual funds'}
           </div>
-        </button>
-      )}
+        )}
+      </button>
 
-      {/* Budget */}
-      {stats.budget && (
-        <div className="pt-5 pb-1">
-          <div className="flex justify-between text-[11px] font-bold tracking-[1.5px] mb-2.5">
-            <span className="text-ink/60">BUDGET {formatCurrency(stats.budget.amount)}</span>
-            <span style={{ color: budgetColor }}>{stats.pct}% USED</span>
-          </div>
-          <div className="h-1.5" style={{ background: 'rgba(27,23,16,.14)' }}>
-            <div className="h-full" style={{ width: `${stats.pct}%`, background: budgetColor }} />
-          </div>
-          <div className="text-xs text-ink/55 mt-2">{formatCurrency(stats.remaining)} remaining</div>
-        </div>
-      )}
-
-      {/* Top category */}
-      {stats.topCat && (
-        <div className="flex items-center gap-3 py-4 mt-3 rule border-t border-ink/25">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: tint(stats.topCat.color, 0.2) }}>{stats.topCat.icon}</div>
-          <div className="flex-1">
-            <div className={LABEL}>Top category</div>
-            <div className="text-[15px] font-bold">{stats.topCat.name}</div>
-          </div>
-          <span className="font-serif-n text-2xl">{formatCurrency(stats.topAmt)}</span>
-        </div>
-      )}
-
-      {/* Recent */}
-      <div className="flex items-baseline justify-between mt-5 mb-1">
-        <span className={LABEL}>Recent</span>
+      {/* The journal — latest spends, grouped by day */}
+      <div className="flex items-baseline justify-between mt-7">
+        <span className="font-serif-i text-[26px] leading-none">The journal</span>
         {expenses.length > 0 && (
-          <button onClick={onOpenSpends} className="text-[11px] font-bold tracking-[1px] text-brand active:opacity-60">
-            SEE ALL SPENDS →
+          <button onClick={onOpenSpends} className="text-[11px] font-bold tracking-[1.5px] active:opacity-60" style={{ color: RUST }}>
+            ALL {expenses.length} →
           </button>
         )}
       </div>
-      {recent.length === 0 ? (
+      {journal.length === 0 ? (
         <div className="py-16 text-center text-ink/40">
           <p className="font-serif-n text-xl text-ink">Nothing yet</p>
           <p className="text-sm mt-1">Tap + to add your first expense</p>
         </div>
-      ) : (
-        <>
-          <div>{recent.map(exp => <ExpenseCard key={exp.id} expense={exp} onEdit={setEditExpense} />)}</div>
-          {expenses.length > recent.length && (
-            <button onClick={onOpenSpends} className="w-full mt-3 py-3.5 rounded-2xl border border-ink/25 text-sm font-bold text-ink/70 active:scale-[0.98] transition-transform">
-              See all {expenses.length} spends →
-            </button>
-          )}
-        </>
-      )}
+      ) : journal.map(g => (
+        <div key={g.date}>
+          <div className="flex justify-between text-[10px] font-bold tracking-[1.8px] mt-4 pb-1.5 border-b border-ink">
+            <span>{dayLabel(g.date)}</span>
+            <span className="text-ink/50">{formatCurrency(g.total)}</span>
+          </div>
+          {g.items.map(exp => <ExpenseCard key={exp.id} expense={exp} onEdit={setEditExpense} variant="journal" />)}
+        </div>
+      ))}
 
       <ExpenseForm isOpen={!!editExpense} onClose={() => setEditExpense(null)} editExpense={editExpense} />
     </div>
   )
+}
+
+// "₹6,976 left for 9 days — 12% lighter than April at this point."
+function HeroLine({ stats, pctTxt, up }) {
+  const parts = []
+  if (stats.budget && stats.isCurrent) {
+    parts.push(stats.remaining >= 0
+      ? `${formatCurrency(stats.remaining)} left for ${stats.daysLeft} ${stats.daysLeft === 1 ? 'day' : 'days'}`
+      : `${formatCurrency(-stats.remaining)} over budget`)
+  } else if (!stats.isCurrent && stats.txCount) {
+    parts.push(`Across ${stats.txCount} spends`)
+  }
+  const cmp = stats.vsPrev != null && Math.abs(stats.vsPrev) >= 0.5
+  if (!parts.length && !cmp) return null
+  return (
+    <p className="font-serif-i text-[21px] leading-[1.25] mt-2.5 text-ink/80">
+      {parts[0]}
+      {cmp && (
+        <>
+          {parts.length ? ' — ' : ''}
+          <span className="not-italic font-serif-n" style={{ color: up(stats.vsPrev) ? RUST : GREEN }}>
+            {stats.vsPrev >= 100
+              ? `${(1 + stats.vsPrev / 100).toFixed(1)}× ${stats.prevName}'s pace`
+              : `${pctTxt(stats.vsPrev)} ${up(stats.vsPrev) ? 'heavier' : 'lighter'}`}
+          </span>
+          {stats.vsPrev < 100 && <> than {stats.prevName}{stats.isCurrent ? ' at this point' : ''}</>}.
+        </>
+      )}
+      {!cmp && '.'}
+    </p>
+  )
+}
+
+function dayLabel(date) {
+  const d = new Date(date + 'T00:00:00')
+  const t = new Date(); t.setHours(0, 0, 0, 0)
+  const diff = Math.round((t - d) / DAY_MS)
+  if (diff === 0) return 'TODAY'
+  if (diff === 1) return 'YESTERDAY'
+  return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }).replace(',', '').toUpperCase()
 }
