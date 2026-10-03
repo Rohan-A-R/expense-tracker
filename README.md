@@ -28,19 +28,19 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/frames/home.png" width="215"/><br/><b>Home</b><br/><sub>Spend · budget · portfolio</sub></td>
+    <td align="center"><img src="docs/frames/home.png" width="215"/><br/><b>Home</b><br/><sub>Budget, journal & portfolio</sub></td>
     <td align="center"><img src="docs/frames/money.png" width="215"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
     <td align="center"><img src="docs/frames/portfolio.png" width="215"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/frames/analysis.png" width="215"/><br/><b>Stock analysis 🔬</b><br/><sub>A research note on demand</sub></td>
+    <td align="center"><img src="docs/frames/detail.png" width="215"/><br/><b>Holding detail</b><br/><sub>Chart, levels, your position</sub></td>
+    <td align="center"><img src="docs/frames/ask.png" width="215"/><br/><b>Ask Finances 🪄</b><br/><sub>AI: your money & the app</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/frames/breakdown.png" width="215"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
     <td align="center"><img src="docs/frames/trends.png" width="215"/><br/><b>Trends</b><br/><sub>Category, month over month</sub></td>
     <td align="center"><img src="docs/frames/udhaar.png" width="215"/><br/><b>Udhaar</b><br/><sub>Who owes you & you owe</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/frames/ask.png" width="215"/><br/><b>Ask Finances 🪄</b><br/><sub>AI: your money & the app</sub></td>
-    <td align="center"><img src="docs/frames/analysis.png" width="215"/><br/><b>Stock analysis 🔬</b><br/><sub>Sector, peers, results & news</sub></td>
-    <td align="center"><img src="docs/frames/detail.png" width="215"/><br/><b>Holding detail</b><br/><sub>Chart, levels, your position</sub></td>
   </tr>
 </table>
 </div>

@@ -14,8 +14,8 @@ const SLIDES = [
   { img: homeImg,      accent: '#D9481C', title: 'Everything at a glance',  body: "Your month's spend, budget, portfolio and dues — all on one home screen." },
   { img: askImg,       accent: '#6C5FB0', title: 'Ask Finances anything',  body: 'Ask about your spending, budgets or how the app works — and get instant monthly recaps.' },
   { img: portfolioImg, accent: '#4E9E6A', title: 'Track your investments',  body: 'Stocks, mutual funds and SIPs with live prices, returns and allocation.' },
-  { img: detailImg,    accent: '#B5761F', title: 'Deep-dive any holding',   body: 'Tap a stock or fund for its live chart, key levels, fundamentals, analyst view and latest news.' },
   { img: analysisImg,  accent: '#1B1710', title: 'A research note on demand', body: 'One tap weighs the sector, real competitors, quarterly results and news — and tracks how past calls played out.' },
+  { img: detailImg,    accent: '#B5761F', title: 'Deep-dive any holding',   body: 'Tap a stock or fund for its live chart, key levels, fundamentals, analyst view and latest news.' },
   { img: moneyImg,     accent: '#6C5FB0', title: 'Your whole net worth',    body: 'Metals, FDs, loans and investments in one number — with a trend that grows.' },
   { img: breakdownImg, accent: '#C9972E', title: 'Where your money goes',   body: 'A clear category breakdown for every month.' },
   { img: trendsImg,    accent: '#3E7CA6', title: 'Spot the trends',         body: 'Watch each category move, month over month.' },]
