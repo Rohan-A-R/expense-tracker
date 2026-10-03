@@ -47,6 +47,47 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 
 ---
 
+## 🔬 How stock analysis works
+
+One tap builds a full research report. Steps 1–6 run **on the phone, for free**: every number is fetched or computed in code. The AI is called **once**, at the end, only to read the finished numbers and write the report, so it can't invent figures and a report costs under ₹1.
+
+```mermaid
+flowchart TD
+    A([📱 Tap “Analyse this stock”]) --> B
+
+    subgraph PHONE["On the phone — free, no AI"]
+        B["<b>1 · Identify</b><br/>1Y daily prices + fundamentals<br/>quarterly results · EPS vs estimates · broker ratings<br/><i>Yahoo Finance</i>"]
+        B --> C["<b>2 · Route</b><br/>industry → 1 of 19 sector playbooks<br/>Steel → iron ore, HRC · Banks → NIFTY Bank, RBI · IT → USD-INR, NASDAQ"]
+        C --> D["<b>3 · Find peers</b><br/>every listed company in the industry<br/>→ nearest by market cap · no hardcoded names, no AI<br/><i>Yahoo screener</i>"]
+        D --> E1 & E2 & E3
+        E1["Peer prices & P/E"]
+        E2["Sector drivers<br/>commodities · indices · FX"]
+        E3["Dated news<br/>company · sector · geopolitics<br/><i>Google News</i>"]
+        E1 & E2 & E3 --> F["<b>5 · Compute</b><br/>RSI · MACD · moving averages · Bollinger · ATR<br/>support & resistance · returns · drawdown<br/>relative strength vs peers & NIFTY<br/>results trend · broker upside · your P&L & weight"]
+        F --> G["<b>6 · Brief</b><br/>one labelled briefing · gaps marked “not available”<br/>+ strict rules + JSON shape"]
+    end
+
+    G --> H
+
+    subgraph CLOUD["Cloud — the only paid step"]
+        H["Cloudflare Worker<br/><i>holds the API key</i>"] --> I["OpenRouter → DeepSeek V4 Flash<br/>JSON mode · 1 retry · backup model"]
+    end
+
+    I --> J["<b>8 · Check & save</b><br/>validate JSON · clamp score · verdict matches score<br/>kept 7 days + “Past calls” track record"]
+    J --> K([📄 Report: score /100 · BUY / WATCH / AVOID<br/>technicals · valuation · results · sector · your position<br/>catalysts · risks · key levels · past calls vs today])
+```
+
+| Step | Where | Code |
+|---|---|---|
+| Fetch prices, fundamentals, peers, news | Yahoo Finance · Google News | [`marketData.js`](src/services/marketData.js) |
+| Pick sector drivers | 19 industry playbooks | [`sectorPlaybook.js`](src/services/sectorPlaybook.js) |
+| Indicators & levels | on-device | [`technicals.js`](src/utils/technicals.js) |
+| Pipeline, briefing, prompt | on-device | [`stockAnalysis.js`](src/services/stockAnalysis.js) |
+| AI proxy | Cloudflare Worker | [`finances-ai-worker.js`](cloudflare-worker/finances-ai-worker.js) |
+| 7-day reports & track record | IndexedDB | [`analysisStore.js`](src/services/analysisStore.js) |
+
+---
+
 ## ✨ Features
 
 ### 🧾 Track
