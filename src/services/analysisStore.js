@@ -36,6 +36,21 @@ export async function loadAnalysis(symbol) {
   }
 }
 
+function snapshotOf(c) {
+  const f = c.fundamentals || {}, t = c.technicals || {}
+  const now = f.ratings?.find(r => r.period === '0m')
+  return {
+    sector: c.sector, industry: c.industry, theme: c.playbook?.generic ? null : c.playbook?.name || null,
+    marketCap: f.marketCap || null, pe: f.pe || null,
+    target: f.targetMeanRaw ?? null, analysts: f.analystCount ?? null,
+    ratings: now ? { buy: now.strongBuy + now.buy, hold: now.hold, sell: now.sell + now.strongSell } : null,
+    high52: t.high52 ?? null, low52: t.low52 ?? null, rsi: t.rsi ?? null,
+    ret1y: t.returns?.['1Y'] ?? null,
+    nextResults: f.nextEarnings || null,
+    peers: (c.peers || []).filter(p => !p.isLeader).slice(0, 4).map(p => ({ name: p.label || p.symbol, pe: p.fund?.pe || null })),
+  }
+}
+
 /**
  * Persist a finished analysis. `res` is analyseStock()'s return value; only the parts the
  * card needs are kept — the raw price series behind peers/drivers would bloat the store.
@@ -52,6 +67,8 @@ export async function saveAnalysis(symbol, res) {
       peers: c.peers.length,
       drivers: c.drivers.length,
       headlines: c.news.reduce((s, g) => s + g.items.length, 0),
+      // A few fixed figures for the report's key-data table (computed, never from the model).
+      snapshot: snapshotOf(c),
     },
   }
   const call = {

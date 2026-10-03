@@ -11,7 +11,6 @@ import { loadAnalysis, saveAnalysis } from '../../services/analysisStore'
 
 const VERDICT_COLOR = { BUY: '#4E9E6A', WATCH: '#B5761F', AVOID: '#D9481C' }
 const H = 'text-[11px] font-bold tracking-[2px] text-ink/55 rule-ink pb-2'
-const SUB = 'text-[10px] font-bold tracking-[1.5px] text-ink/55'
 
 const inr = (v) => `₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`
 const price2 = (v) => `₹${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -64,7 +63,7 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
       </div>
 
       {state === 'done' && latest
-        ? <Report latest={latest} />
+        ? <Report latest={latest} name={name} symbol={symbol} />
         : <Intro state={state} step={step} err={err} stale={stale} onRun={run} />}
 
       <TrackRecord history={history} currentPrice={currentPrice} />
@@ -101,81 +100,199 @@ function Intro({ state, step, err, stale, onRun }) {
 }
 
 // ---- the report ----
-function Report({ latest }) {
-  const r = latest.report, m = latest.meta
+// Laid out like a broker's research note: a masthead with the rating box, an investment
+// summary up front, a key-data table, numbered sections, upside/downside side by side,
+// and disclosures in small print. Every figure in the tables comes from `meta` (computed);
+// only the prose is the model's.
+const INK = '#1B1710', GREEN = '#4E9E6A', RUST = '#D9481C'
+const rowB = { borderTop: '1px dotted rgba(27,23,16,.28)' }
+
+function Report({ latest, name, symbol }) {
+  const r = latest.report, m = latest.meta, snap = m.snapshot || {}
   const color = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.WATCH
   const when = new Date(latest.generatedAt)
+  const upside = snap.target && m.price ? ((snap.target - m.price) / m.price) * 100 : null
+  const sections = [
+    ['Technicals', r.technicals], ['Valuation', r.valuation], ['Results & earnings', r.earnings],
+    ['Sector & drivers', r.sector], ['Key levels', r.levels],
+  ].filter(([, b]) => b)
 
   return (
-    <div>
-      {/* verdict line */}
-      <div className="flex items-end justify-between pt-4">
-        <div>
-          <div className={SUB}>SCORE</div>
-          <div className="font-serif-n text-[56px] leading-[0.95] tracking-[-1px]">
-            {r.score ?? '—'}<span className="text-[22px] text-ink/35 tracking-normal"> / 100</span>
-          </div>
-        </div>
-        <div className="text-right pb-1.5">
-          <div className={SUB}>VERDICT</div>
-          <div className="text-[15px] font-bold tracking-[2px] mt-0.5" style={{ color }}>{r.verdict}</div>
-        </div>
+    <div className="pt-4">
+      {/* masthead */}
+      <div className="flex justify-between text-[9.5px] font-bold tracking-[1.8px] text-ink/50">
+        <span className="truncate pr-3">EQUITY RESEARCH · {(snap.theme || snap.industry || 'INDIA').toUpperCase()}</span>
+        <span className="shrink-0">{when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}</span>
       </div>
-      <div className="h-1 mt-3" style={{ background: 'rgba(27,23,16,.14)' }}>
-        <div className="h-full" style={{ width: `${r.score ?? 0}%`, background: color }} />
+      <div className="font-serif-n text-[32px] leading-none mt-2">{name}</div>
+      <div className="text-[11.5px] text-ink/50 mt-1">{symbol}{snap.sector ? ` · ${snap.sector}` : ''}</div>
+
+      {/* rating box */}
+      <div className="grid grid-cols-3 mt-4 border-y-[1.5px] border-ink">
+        <div className="py-3 pr-3 flex flex-col justify-center" style={{ background: color, color: '#F5F0E4', margin: '-1.5px 0' }}>
+          <div className="text-[9px] font-bold tracking-[1.6px] opacity-80 pl-3">RATING</div>
+          <div className="text-[17px] font-bold tracking-[2px] pl-3 mt-0.5">{r.verdict}</div>
+        </div>
+        <Cell label="SCORE" value={<>{r.score ?? '—'}<span className="text-[13px] text-ink/40"> / 100</span></>} />
+        <Cell label="PRICE AT NOTE" value={m.price ? price2(m.price) : '—'} last />
       </div>
 
-      {r.headline && <p className="font-serif-i text-[22px] leading-snug mt-5">{r.headline}</p>}
+      {r.headline && <p className="font-serif-i text-[23px] leading-[1.2] mt-5">{r.headline}</p>}
+
+      {/* investment summary, with a drop cap */}
+      {r.verdictText && (
+        <div className="mt-5">
+          <SecHead>Investment summary</SecHead>
+          <p className="text-[14px] leading-[1.65] text-ink/85 mt-2">
+            <span className="font-serif-n float-left text-[46px] leading-[0.85] mr-1.5 mt-1" style={{ color }}>{r.verdictText.charAt(0)}</span>
+            {r.verdictText.slice(1)}
+          </p>
+        </div>
+      )}
+
+      {/* key data */}
+      <KeyData snap={snap} price={m.price} upside={upside} />
 
       {m.position && <Holding pos={m.position} text={r.position} />}
 
-      <Para title="TECHNICALS" body={r.technicals} />
-      <Para title="VALUATION" body={r.valuation} />
-      <Para title="RESULTS & EARNINGS" body={r.earnings} />
-      <Para title="SECTOR & DRIVERS" body={r.sector} />
-      <Para title="KEY LEVELS" body={r.levels} />
+      {/* numbered sections */}
+      {sections.map(([t, body], i) => (
+        <div key={t} className="mt-6">
+          <div className="flex items-baseline gap-3 pb-1.5 border-b border-ink">
+            <span className="font-serif-i text-[22px] leading-none" style={{ color }}>{i + 1}</span>
+            <span className="text-[11px] font-bold tracking-[1.8px]">{t.toUpperCase()}</span>
+          </div>
+          <p className="text-[13.5px] leading-[1.65] text-ink/85 mt-2.5">{body}</p>
+          {t === 'Valuation' && snap.peers?.length > 0 && <PeerTable snap={snap} name={name} />}
+        </div>
+      ))}
 
-      <List title="CATALYSTS" items={r.catalysts} color="#4E9E6A" />
-      <List title="RISKS" items={r.risks} color="#D9481C" />
-
-      <Para title="VERDICT" body={r.verdictText} />
-
-      {!!r.missing?.length && (
-        <p className="text-[12px] text-ink/45 leading-snug mt-4">Not available: {r.missing.join(' · ')}</p>
+      {/* upside / downside */}
+      {(r.catalysts?.length > 0 || r.risks?.length > 0) && (
+        <div className="grid grid-cols-2 gap-4 mt-7 pt-3 border-t-[1.5px] border-ink">
+          <Points title="UPSIDE" mark="▲" color={GREEN} items={r.catalysts} />
+          <Points title="DOWNSIDE" mark="▼" color={RUST} items={r.risks} />
+        </div>
       )}
 
-      <p className="text-[11px] text-ink/40 leading-snug mt-5 pt-3" style={{ borderTop: '1px dotted rgba(27,23,16,.32)' }}>
-        {when.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
-        {' '}· {m.peers} peers · {m.drivers} market drivers · {m.headlines} headlines.
-        {' '}Research and education only, not investment advice.
-      </p>
+      {!!r.missing?.length && (
+        <p className="text-[12px] text-ink/45 leading-snug mt-5">Not available: {r.missing.join(' · ')}</p>
+      )}
+
+      {/* disclosures */}
+      <div className="mt-6 px-3.5 py-3 text-[10.5px] leading-[1.55] text-ink/50" style={{ background: 'rgba(27,23,16,.045)' }}>
+        <span className="font-bold tracking-[1.2px] text-ink/60">DISCLOSURES · </span>
+        Written by an AI model (DeepSeek) from data gathered on {when.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}:
+        {' '}{m.peers} size-matched peers, {m.drivers} market drivers and {m.headlines} news headlines. All figures are
+        computed in the app; the model supplies the reading only. Research and education, not investment advice.
+      </div>
     </div>
   )
 }
 
-// Your holding — the Home screen's stat-row language (ink rule, dotted dividers, serif values).
+function SecHead({ children }) {
+  return <div className="text-[11px] font-bold tracking-[1.8px] pb-1.5 border-b border-ink">{children.toUpperCase()}</div>
+}
+
+function Cell({ label, value, last }) {
+  return (
+    <div className="py-3 pl-3" style={last ? undefined : { borderRight: '1px dotted rgba(27,23,16,.3)' }}>
+      <div className="text-[9px] font-bold tracking-[1.6px] text-ink/50">{label}</div>
+      <div className="font-serif-n text-[22px] leading-tight">{value}</div>
+    </div>
+  )
+}
+
+function KeyData({ snap, price, upside }) {
+  const rows = [
+    ['Market cap', snap.marketCap],
+    ['P/E (TTM)', snap.pe],
+    ['52-week range', snap.low52 != null ? `${price2(snap.low52)} – ${price2(snap.high52)}` : null],
+    ['1-year return', snap.ret1y != null ? signed(snap.ret1y) : null, snap.ret1y != null ? (snap.ret1y >= 0 ? GREEN : RUST) : null],
+    ['RSI (14)', snap.rsi],
+    ['Broker target', snap.target ? `${price2(snap.target)}${upside != null ? ` (${signed(upside)})` : ''}` : null, upside != null ? (upside >= 0 ? GREEN : RUST) : null],
+    ['Broker ratings', snap.ratings ? `${snap.ratings.buy} buy · ${snap.ratings.hold} hold · ${snap.ratings.sell} sell` : null],
+    ['Next results', snap.nextResults && !isNaN(new Date(snap.nextResults))
+      ? new Date(snap.nextResults).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : snap.nextResults],
+  ].filter(([, v]) => v != null && v !== '')
+  if (!rows.length) return null
+  return (
+    <div className="mt-6">
+      <SecHead>Key data</SecHead>
+      <div className="grid grid-cols-2 gap-x-4">
+        {rows.map(([k, v, c], i) => (
+          <div key={k} className="py-2" style={i >= 2 ? rowB : undefined}>
+            <div className="text-[9.5px] font-bold tracking-[1.2px] text-ink/45 uppercase">{k}</div>
+            <div className="text-[13.5px] font-semibold mt-0.5" style={c ? { color: c } : undefined}>{v}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Exchange listings come in capitals ("JSW STEEL LIMITED") — print them as names.
+const SMALL = { OF: 'of', AND: 'and', THE: 'the', N: '&' }
+const tidyName = (n) => /[a-z]/.test(n) ? n : n.split(/\s+/)
+  .filter((w, i, a) => !(i === a.length - 1 && /^(LIMITED|LTD\.?|L)$/.test(w)))   // "…LIMITED", cut-off "…L"
+  .map(w => SMALL[w] ?? (w.length <= 3 ? w : w.charAt(0) + w.slice(1).toLowerCase()))   // keep JSW, SBI
+  .join(' ')
+
+function PeerTable({ snap, name }) {
+  const rows = [{ name, pe: snap.pe, self: true }, ...snap.peers]
+  return (
+    <div className="mt-3 text-[12.5px]">
+      <div className="flex justify-between text-[9.5px] font-bold tracking-[1.2px] text-ink/45 pb-1">
+        <span>PEERS BY SIZE</span><span>P/E</span>
+      </div>
+      {rows.map((p, i) => (
+        <div key={p.name + i} className="flex justify-between py-1.5" style={rowB}>
+          <span className={`truncate pr-3 ${p.self ? 'font-bold' : 'text-ink/75'}`}>{tidyName(p.name)}</span>
+          <span className={`font-serif-n text-[15px] ${p.self ? '' : 'text-ink/70'}`}>{p.pe ?? '—'}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Points({ title, mark, color, items }) {
+  if (!items?.length) return <div />
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-bold tracking-[1.8px] pb-1.5" style={{ color }}>{title}</div>
+      {items.map((t, i) => (
+        <div key={i} className="flex gap-1.5 py-2 text-[12.5px] leading-snug text-ink/85" style={rowB}>
+          <span className="text-[8px] mt-[5px] shrink-0" style={{ color }}>{mark}</span><span>{t}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Note to the holder — a tinted aside, as research notes box anything reader-specific.
 function Holding({ pos, text }) {
   const up = pos.pnl >= 0
   const cells = [
-    { l: 'YOUR P&L', v: `${up ? '+' : '−'}${inr(pos.pnl)}`, s: pos.pnlPct != null ? signed(pos.pnlPct, 2) : null, c: up ? '#4E9E6A' : '#D9481C' },
+    { l: 'YOUR P&L', v: `${up ? '+' : '−'}${inr(pos.pnl)}`, s: pos.pnlPct != null ? signed(pos.pnlPct, 2) : null, c: up ? GREEN : RUST },
     { l: 'OF PORTFOLIO', v: pos.weightPct != null ? `${pos.weightPct}%` : '—' },
     { l: 'AVG COST', v: price2(pos.avgBuy), s: `${pos.qty} shares` },
   ]
   return (
-    <div className="mt-6">
-      <div className="flex border-t border-ink" style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>
+    <div className="mt-6 px-4 pt-3 pb-3.5" style={{ background: 'rgba(217,72,28,.06)', borderLeft: `3px solid ${RUST}` }}>
+      <div className="text-[10px] font-bold tracking-[1.8px]" style={{ color: RUST }}>NOTE TO HOLDER</div>
+      <div className="flex mt-2">
         {cells.map((x, i) => (
-          <div key={x.l} className="flex-1 min-w-0 py-3"
-            style={{ paddingLeft: i ? 12 : 0, paddingRight: i < 2 ? 12 : 0, borderRight: i < 2 ? '1px dotted rgba(27,23,16,.32)' : 'none' }}>
-            <div className="text-[10px] font-bold tracking-[1.5px] text-ink/55 truncate">{x.l}</div>
-            <div className="font-serif-n text-[21px] leading-tight truncate" style={x.c ? { color: x.c } : undefined}>{x.v}</div>
-            {x.s && <div className="text-[11px] truncate" style={{ color: x.c || 'rgba(27,23,16,.5)' }}>{x.s}</div>}
+          <div key={x.l} className="flex-1 min-w-0"
+            style={{ paddingLeft: i ? 10 : 0, paddingRight: i < 2 ? 10 : 0, borderRight: i < 2 ? '1px dotted rgba(27,23,16,.3)' : 'none' }}>
+            <div className="text-[9px] font-bold tracking-[1.3px] text-ink/50 truncate">{x.l}</div>
+            <div className="font-serif-n text-[19px] leading-tight truncate" style={x.c ? { color: x.c } : undefined}>{x.v}</div>
+            {x.s && <div className="text-[10.5px] truncate" style={{ color: x.c || 'rgba(27,23,16,.5)' }}>{x.s}</div>}
           </div>
         ))}
       </div>
-      {text && <p className="text-[13.5px] leading-relaxed text-ink/85 mt-3">{text}</p>}
+      {text && <p className="text-[13px] leading-relaxed text-ink/85 mt-2.5">{text}</p>}
       {(pos.nearestSupport || pos.stop2Atr) && (
-        <p className="text-[11.5px] text-ink/45 mt-1.5">
+        <p className="text-[11px] text-ink/45 mt-1.5">
           Reference levels{pos.nearestSupport ? ` · support ${price2(pos.nearestSupport)}` : ''}{pos.stop2Atr ? ` · 2×ATR ${price2(pos.stop2Atr)}` : ''}. Not a sell signal.
         </p>
       )}
@@ -183,60 +300,35 @@ function Holding({ pos, text }) {
   )
 }
 
-function Para({ title, body }) {
-  if (!body) return null
-  return (
-    <div className="mt-5">
-      <div className={`${SUB} mb-1`}>{title}</div>
-      <p className="text-[13.5px] leading-relaxed text-ink/85">{body}</p>
-    </div>
-  )
-}
-
-function List({ title, items, color }) {
-  if (!items?.length) return null
-  return (
-    <div className="mt-5">
-      <div className="text-[10px] font-bold tracking-[1.5px] mb-1" style={{ color }}>{title}</div>
-      {items.map((t, i) => (
-        <div key={i} className="flex gap-2.5 py-1.5 text-[13.5px] leading-snug text-ink/85"
-          style={i ? { borderTop: '1px dotted rgba(27,23,16,.25)' } : undefined}>
-          <span className="text-ink/35">—</span><span>{t}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ---- how past calls played out ----
+// ---- how past calls played out ----  (a broker note's "rating history")
 function TrackRecord({ history, currentPrice }) {
   if (!history?.length) return null
   return (
     <div className="mt-7">
-      <div className={`${SUB} pb-2`} style={{ borderBottom: '1px solid rgba(27,23,16,.25)' }}>PAST CALLS</div>
-      {history.map((h, i) => {
+      <SecHead>Rating history</SecHead>
+      <div className="flex gap-3 text-[9px] font-bold tracking-[1.3px] text-ink/45 pt-2 pb-1">
+        <span className="w-14">DATE</span><span className="w-16">RATING</span><span>SCORE</span>
+        <span className="flex-1 text-right">PRICE</span><span className="w-14 text-right">SINCE</span>
+      </div>
+      {history.map(h => {
         // A call under a day old has had no time to play out — comparing it is just noise.
         const fresh = Date.now() - new Date(h.at).getTime() < 864e5
         const move = !fresh && currentPrice && h.price ? ((currentPrice - h.price) / h.price) * 100 : null
         const color = VERDICT_COLOR[h.verdict] || 'inherit'
         return (
-          <div key={h.at} className="flex items-baseline gap-3 py-2.5 text-[13px]"
-            style={i ? { borderTop: '1px dotted rgba(27,23,16,.25)' } : undefined}>
+          <div key={h.at} className="flex items-baseline gap-3 py-2.5 text-[13px]" style={rowB}>
             <span className="w-14 text-ink/55 shrink-0">{day(h.at)}</span>
             <span className="w-16 shrink-0 text-[11px] font-bold tracking-[1.5px]" style={{ color }}>{h.verdict}</span>
             <span className="text-ink/55 shrink-0">{h.score}</span>
-            <span className="flex-1 text-right text-ink/70 truncate">
-              {h.price ? price2(h.price) : '—'}
-              {!fresh && currentPrice ? <> → {price2(currentPrice)}</> : null}
-            </span>
+            <span className="flex-1 text-right text-ink/70 truncate">{h.price ? price2(h.price) : '—'}</span>
             <span className="w-14 text-right font-semibold shrink-0"
-              style={{ color: move == null ? 'rgba(27,23,16,.4)' : move >= 0 ? '#4E9E6A' : '#D9481C' }}>
+              style={{ color: move == null ? 'rgba(27,23,16,.4)' : move >= 0 ? GREEN : RUST }}>
               {move != null ? signed(move) : fresh ? 'today' : '—'}
             </span>
           </div>
         )
       })}
-      <p className="text-[11px] text-ink/40 mt-1.5">Price when each call was made, against today's price.</p>
+      <p className="text-[11px] text-ink/40 mt-1.5">Price when each rating was given, and the move to today's {currentPrice ? price2(currentPrice) : 'price'}.</p>
     </div>
   )
 }
