@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { getSetting } from '../services/db'
 import AiRecapCard from '../components/ai/AiRecapCard'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ReferenceLine } from 'recharts'
+import { Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ReferenceLine } from 'recharts'
 import ReportTab from '../components/insights/ReportTab'
 import Modal from '../components/ui/Modal'
 import { generateReport } from '../utils/report'
@@ -71,13 +71,39 @@ export default function Analytics() {
   })
   const effectiveMonth = months.includes(selMonth) ? selMonth : months[0] || ''
 
+  // Breakdown: per-category totals for the month, with spend counts and the change vs the
+  // previous month. For the running month the comparison is "at the same point" (same day of
+  // the period), as on Home — a full April against a part May would always read as lighter.
   const pieData = useMemo(() => {
-    const totals = {}
-    expenses.filter(e => e.month === effectiveMonth).forEach(e => { totals[e.categoryId] = (totals[e.categoryId] || 0) + Number(e.amount) })
-    return Object.entries(totals)
-      .map(([id, v]) => { const c = categories.find(x => x.id === Number(id)); return { name: c?.name || 'Other', value: v, color: c?.color || '#A07C4E', icon: c?.icon || '📦' } })
+    if (!effectiveMonth) return []
+    const sd = Math.max(1, Number(monthStartDay) || 1)
+    const [y, m] = effectiveMonth.split('-').map(Number)
+    const prevKey = `${new Date(y, m - 2, 1).getFullYear()}-${String(new Date(y, m - 2, 1).getMonth() + 1).padStart(2, '0')}`
+    const isCurrent = effectiveMonth === currentFinMonth(sd)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const elapsed = Math.floor((today - new Date(y, m - 1, sd)) / 864e5) + 1
+    const prevCut = isCurrent ? new Date(y, m - 2, sd + elapsed - 1) : null
+    const cur = {}, prev = {}
+    expenses.forEach(e => {
+      if (e.month === effectiveMonth) {
+        const t = (cur[e.categoryId] ||= { value: 0, count: 0 }); t.value += Number(e.amount); t.count++
+      } else if (e.month === prevKey && (!prevCut || new Date(e.date + 'T00:00:00') <= prevCut)) {
+        prev[e.categoryId] = (prev[e.categoryId] || 0) + Number(e.amount)
+      }
+    })
+    const hasPrev = Object.keys(prev).length > 0
+    return Object.entries(cur)
+      .map(([id, t]) => {
+        const c = categories.find(x => x.id === Number(id))
+        return { name: c?.name || 'Other', value: t.value, count: t.count, color: c?.color || '#A07C4E', icon: c?.icon || '📦',
+          delta: hasPrev ? t.value - (prev[id] || 0) : null }
+      })
       .sort((a, b) => b.value - a.value)
-  }, [expenses, categories, effectiveMonth])
+      .map((d, i, all) => Object.assign(d, { prevTotal: hasPrev ? Object.values(prev).reduce((s, v) => s + v, 0) : null }))
+  }, [expenses, categories, effectiveMonth, monthStartDay])
+  const prevMonthName = effectiveMonth
+    ? new Date(Number(effectiveMonth.slice(0, 4)), Number(effectiveMonth.slice(5)) - 2, 1).toLocaleDateString('en-IN', { month: 'short' })
+    : ''
 
   const barData = useMemo(() => {
     const latestMonth = months[0] || effectiveMonth
@@ -182,39 +208,7 @@ export default function Analytics() {
           <Empty label="No data for this month" />
         ) : (
           <>
-            <div className="relative flex justify-center my-2 mb-6">
-              <div className="relative" style={{ width: 210, height: 210 }}>
-                <PieChart width={210} height={210}>
-                  <Pie data={pieData} cx={105} cy={105} innerRadius={68} outerRadius={92} paddingAngle={2} dataKey="value" stroke="none" startAngle={90} endAngle={-270} isAnimationActive={false}>
-                    {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                </PieChart>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-[10px] font-bold tracking-[1.5px] text-ink/55">TOTAL</p>
-                  <p className="font-serif-n text-3xl">{formatCurrency(monthTotal)}</p>
-                </div>
-              </div>
-            </div>
-            {pieData.map((item, i) => {
-              const pct = monthTotal > 0 ? Math.round((item.value / monthTotal) * 100) : 0
-              return (
-                <div key={i} className="flex items-center gap-3 py-3 rule-dot">
-                  <div className="w-9 h-9 rounded-[10px] flex items-center justify-center text-base" style={{ background: tint(item.color, 0.18) }}>{item.icon}</div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-semibold">{item.name}</span>
-                      <span className="font-serif-n text-base">{formatCurrency(item.value)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <div className="flex-1 h-1" style={{ background: 'rgba(27,23,16,.1)' }}>
-                        <div className="h-full" style={{ width: `${pct}%`, background: item.color }} />
-                      </div>
-                      <span className="text-[11px] font-bold text-ink/50 w-8 text-right">{pct}%</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            <Breakdown data={pieData} total={monthTotal} prevName={prevMonthName} />
           </>
         )
       )}
@@ -400,6 +394,79 @@ function TrendRow({ t, months, onRemove }) {
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Magazine-style breakdown: a headline sentence, one stacked bar for the whole month, then a
+// ranked table — amount, number of spends and the change on last month.
+function Breakdown({ data, total, prevName }) {
+  const top = data[0]
+  const share = total > 0 ? Math.round((top.value / total) * 100) : 0
+  const prevTotal = data[0]?.prevTotal
+  const vs = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : null
+  const spends = data.reduce((s, d) => s + d.count, 0)
+  // the bar shows the top five and folds the long tail into one grey "everything else"
+  const bar = data.length > 6
+    ? [...data.slice(0, 5), { name: 'Everything else', value: data.slice(5).reduce((s, d) => s + d.value, 0), color: '#B5AC9C' }]
+    : data
+  const riser = data.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta)[0]
+  const signedInr = (v) => `${v > 0 ? '+' : '−'}${formatCurrency(Math.abs(v))}`
+
+  return (
+    <div>
+      <div className="text-[10px] font-bold tracking-[2px]" style={{ color: ACCENT }}>WHERE {formatCurrency(total)} WENT</div>
+      <p className="font-serif-n text-[29px] leading-[1.12] mt-2">
+        <span className="font-serif-i" style={{ color: top.color }}>{top.name}</span> took the biggest share — ₹{share} of every ₹100.
+      </p>
+      <p className="text-[12.5px] text-ink/55 mt-2">
+        {data.length} {data.length === 1 ? 'category' : 'categories'} · {spends} spends
+        {vs != null && Math.abs(vs) >= 0.5 && <> · <span style={{ color: vs > 0 ? ACCENT : '#4E9E6A' }}>{vs > 0 ? '↑' : '↓'} {Math.round(Math.abs(vs))}%</span> vs {prevName}</>}
+      </p>
+
+      <div className="flex h-10 mt-5 gap-[2px]">
+        {bar.map(d => {
+          const pct = (d.value / total) * 100
+          return (
+            <div key={d.name} className="flex items-end pl-1.5 pb-1 text-[10px] font-bold text-white overflow-hidden" style={{ flex: d.value, background: d.color }}>
+              {pct >= 9 ? `${Math.round(pct)}%` : ''}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="mt-6 border-t border-ink">
+        <div className="grid grid-cols-[22px_1fr_76px_60px] text-[9.5px] font-bold tracking-[1.4px] text-ink/50 py-2" style={{ borderBottom: '1px solid rgba(27,23,16,.15)' }}>
+          <span /><span>CATEGORY</span><span className="text-right">SPENT</span><span className="text-right">VS {prevName.toUpperCase()}</span>
+        </div>
+        {data.map((d, i) => (
+          <div key={d.name} className="grid grid-cols-[22px_1fr_76px_60px] items-center py-3" style={{ borderBottom: '1px dotted rgba(27,23,16,.25)' }}>
+            <span className="font-serif-i text-[18px] text-ink/40">{i + 1}</span>
+            <div className="min-w-0 pr-3">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] shrink-0">{d.icon}</span>
+                <span className="text-[14px] font-semibold truncate">{d.name}</span>
+              </div>
+              <div className="text-[11px] text-ink/45 mt-0.5">{d.count} {d.count === 1 ? 'spend' : 'spends'} · {Math.round((d.value / total) * 100)}%</div>
+              <div className="h-[3px] mt-1.5" style={{ background: 'rgba(27,23,16,.08)' }}>
+                <div className="h-full" style={{ width: `${(d.value / top.value) * 100}%`, background: d.color }} />
+              </div>
+            </div>
+            <span className="font-serif-n text-[19px] text-right">{formatCurrency(d.value)}</span>
+            <span className="text-[11.5px] font-bold text-right"
+              style={{ color: d.delta == null || Math.round(d.delta) === 0 ? 'rgba(27,23,16,.4)' : d.delta > 0 ? ACCENT : '#4E9E6A' }}>
+              {d.delta == null ? '—' : Math.round(d.delta) === 0 ? 'same' : signedInr(d.delta)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {riser && (
+        <p className="mt-5 pl-3 font-serif-i text-[18px] leading-snug text-ink/80" style={{ borderLeft: `2px solid ${ACCENT}` }}>
+          {riser.name} is up {formatCurrency(riser.delta)} on {prevName}
+          {vs > 0 && riser.delta >= (total - prevTotal) * 0.5 ? ' — most of this month’s rise in one place.' : '.'}
+        </p>
+      )}
     </div>
   )
 }
