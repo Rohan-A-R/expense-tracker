@@ -20,20 +20,18 @@ export default function ExpenseCard({ expense, onEdit, variant }) {
 
   return (
     <>
-      <div className="rule-dot">
+      <div className={journal ? '' : 'rule-dot'}>
         {journal ? (
-          <div className="flex items-center gap-3 py-2.5 cursor-pointer" onClick={() => setExpanded(s => !s)}>
-            <div className="w-9 h-9 rounded-[11px] flex items-center justify-center text-[17px] flex-shrink-0"
-              style={{ background: tint(cat?.color, 0.18) }}>
-              {cat?.icon || '📦'}
-            </div>
-            <p className="flex-1 min-w-0 truncate">
-              <span className="text-[14.5px] font-semibold">{expense.description || cat?.name || 'Expense'}</span>
+          <div className="flex items-center gap-2.5 py-[7px] cursor-pointer" onClick={() => setExpanded(s => !s)}>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center text-[14px] flex-shrink-0"
+              style={{ background: tint(cat?.color, 0.22) }}>{cat?.icon || '📦'}</span>
+            <p className="flex-1 min-w-0 truncate leading-tight">
+              <span className="text-[14px] font-semibold">{expense.description || cat?.name || 'Expense'}</span>
               {expense.paymentType && (
-                <span className="text-[10.5px] tracking-[0.6px] uppercase text-ink/45 ml-1.5">{expense.paymentType}</span>
+                <span className="text-[9.5px] font-bold tracking-[0.8px] uppercase ml-1.5" style={{ color: cat?.color || 'rgba(27,23,16,.45)' }}>{expense.paymentType}</span>
               )}
             </p>
-            <p className="font-serif-n text-[20px] leading-none flex-shrink-0">{formatCurrency(expense.amount)}</p>
+            <p className="font-serif-n text-[19px] leading-none flex-shrink-0">{formatCurrency(expense.amount)}</p>
           </div>
         ) : (
         <div

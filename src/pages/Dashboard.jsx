@@ -269,15 +269,34 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
           <p className="font-serif-n text-xl text-ink">Nothing yet</p>
           <p className="text-sm mt-1">Tap + to add your first expense</p>
         </div>
-      ) : journal.map(g => (
-        <div key={g.date}>
-          <div className="flex justify-between text-[10px] font-bold tracking-[1.8px] mt-4 pb-1.5 border-b border-ink">
-            <span>{dayLabel(g.date)}</span>
-            <span className="text-ink/50">{formatCurrency(g.total)}</span>
-          </div>
-          {g.items.map(exp => <ExpenseCard key={exp.id} expense={exp} onEdit={setEditExpense} variant="journal" />)}
+      ) : (
+        <div className="mt-3 border-t border-ink">
+          {journal.map(g => {
+            const d = new Date(g.date + 'T00:00:00'), rel = relDay(g.date)
+            return (
+              // A diary page per day: the date in the margin, that day's spends beside it.
+              <div key={g.date} className="flex gap-4 pt-3.5 pb-3" style={{ borderBottom: '1px solid rgba(27,23,16,.15)' }}>
+                <div className="w-11 shrink-0 text-center pt-0.5">
+                  <div className="font-serif-n text-[30px] leading-none">{d.getDate()}</div>
+                  <div className="text-[9.5px] font-bold tracking-[1.5px] mt-1" style={{ color: rel ? RUST : 'rgba(27,23,16,.5)' }}>
+                    {rel || d.toLocaleDateString('en-IN', { weekday: 'short' }).toUpperCase()}
+                  </div>
+                  <div className="text-[9px] font-bold tracking-[1.2px] text-ink/35">{d.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()}</div>
+                </div>
+                <div className="flex-1 min-w-0 pl-4" style={{ borderLeft: '1px dotted rgba(27,23,16,.3)' }}>
+                  {g.items.map(exp => <ExpenseCard key={exp.id} expense={exp} onEdit={setEditExpense} variant="journal" />)}
+                  {(g.items.length > 1 || g.total !== Number(g.items[0].amount)) && (
+                    <div className="flex justify-between items-baseline pt-1.5 text-[10px] font-bold tracking-[1.5px] text-ink/45">
+                      <span>DAY TOTAL</span>
+                      <span className="font-serif-n text-[17px] tracking-normal text-ink">{formatCurrency(g.total)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      ))}
+      )}
 
       <ExpenseForm isOpen={!!editExpense} onClose={() => setEditExpense(null)} editExpense={editExpense} />
     </div>
@@ -315,11 +334,8 @@ function HeroLine({ stats, pctTxt, up }) {
   )
 }
 
-function dayLabel(date) {
-  const d = new Date(date + 'T00:00:00')
+function relDay(date) {
   const t = new Date(); t.setHours(0, 0, 0, 0)
-  const diff = Math.round((t - d) / DAY_MS)
-  if (diff === 0) return 'TODAY'
-  if (diff === 1) return 'YESTERDAY'
-  return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }).replace(',', '').toUpperCase()
+  const diff = Math.round((t - new Date(date + 'T00:00:00')) / DAY_MS)
+  return diff === 0 ? 'TODAY' : diff === 1 ? 'YDAY' : null
 }
