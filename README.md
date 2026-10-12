@@ -28,7 +28,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/frames/home.png?v=2" width="215"/><br/><b>Home</b><br/><sub>Budget, journal & portfolio</sub></td>
+    <td align="center"><img src="docs/frames/home.png?v=3" width="215"/><br/><b>Home</b><br/><sub>Budget, journal & portfolio</sub></td>
     <td align="center"><img src="docs/frames/money.png?v=2" width="215"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
     <td align="center"><img src="docs/frames/portfolio.png?v=2" width="215"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
   </tr>
@@ -38,7 +38,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
     <td align="center"><img src="docs/frames/ask.png?v=2" width="215"/><br/><b>Ask Finances 🪄</b><br/><sub>AI: your money & the app</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/frames/breakdown.png?v=2" width="215"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
+    <td align="center"><img src="docs/frames/breakdown.png?v=3" width="215"/><br/><b>Breakdown</b><br/><sub>Where money goes</sub></td>
     <td align="center"><img src="docs/frames/trends.png?v=2" width="215"/><br/><b>Trends</b><br/><sub>Category, month over month</sub></td>
     <td align="center"><img src="docs/frames/udhaar.png?v=2" width="215"/><br/><b>Udhaar</b><br/><sub>Who owes you & you owe</sub></td>
   </tr>
