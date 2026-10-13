@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { analyseStock } from '../../services/stockAnalysis'
 import { loadAnalysis, saveAnalysis } from '../../services/analysisStore'
 
@@ -28,6 +29,7 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
   const [stale, setStale] = useState(null)
   const [history, setHistory] = useState([])
   const [err, setErr] = useState('')
+  const [open, setOpen] = useState(false)          // full report sheet
 
   useEffect(() => {
     let off = false
@@ -45,7 +47,7 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
       const res = await analyseStock(symbol, name, s => setStep(s.replace(/…$/, '')), position)
       const saved = await saveAnalysis(symbol, res)
       setLatest(saved.latest); setHistory(saved.history); setStale(null)
-      setState('done')
+      setState('done'); setOpen(true)              // a fresh report opens straight away
     } catch (e) {
       setErr(String(e?.message || e)); setState('error')
     }
@@ -63,11 +65,65 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
       </div>
 
       {state === 'done' && latest
-        ? <Report latest={latest} name={name} symbol={symbol} />
+        ? <Summary latest={latest} onOpen={() => setOpen(true)} />
         : <Intro state={state} step={step} err={err} stale={stale} onRun={run} />}
 
-      <TrackRecord history={history} currentPrice={currentPrice} />
+      {/* The full note opens in its own sheet so the holding page stays short. */}
+      {open && latest && (
+        <ReportSheet onClose={() => setOpen(false)}>
+          <Report latest={latest} name={name} symbol={symbol} />
+          <TrackRecord history={history} currentPrice={currentPrice} />
+        </ReportSheet>
+      )}
     </section>
+  )
+}
+
+// ---- on the holding page: just the verdict and a way in ----
+function Summary({ latest, onOpen }) {
+  const r = latest.report
+  const color = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.WATCH
+  return (
+    <button onClick={onOpen} className="w-full text-left pt-4 pb-1 active:opacity-80">
+      <div className="flex items-stretch border-y-[1.5px] border-ink">
+        <div className="px-3 py-2.5 flex flex-col justify-center" style={{ background: color, color: '#F5F0E4', margin: '-1.5px 0' }}>
+          <div className="text-[8.5px] font-bold tracking-[1.5px] opacity-80">RATING</div>
+          <div className="text-[15px] font-bold tracking-[1.8px]">{r.verdict}</div>
+        </div>
+        <div className="px-3.5 py-2.5 flex flex-col justify-center" style={{ borderRight: '1px dotted rgba(27,23,16,.3)' }}>
+          <div className="text-[8.5px] font-bold tracking-[1.5px] text-ink/50">SCORE</div>
+          <div className="font-serif-n text-[20px] leading-tight">{r.score ?? '—'}<span className="text-[12px] text-ink/40"> / 100</span></div>
+        </div>
+        <div className="px-3.5 py-2.5 flex flex-col justify-center min-w-0">
+          <div className="text-[8.5px] font-bold tracking-[1.5px] text-ink/50">NOTE OF</div>
+          <div className="text-[13px] font-semibold">{day(latest.generatedAt)}</div>
+        </div>
+      </div>
+      {r.headline && <p className="font-serif-i text-[20px] leading-snug mt-3.5">{r.headline}</p>}
+      <div className="w-full mt-4 py-3.5 rounded-2xl bg-ink text-paper text-sm font-bold text-center">Read full report →</div>
+    </button>
+  )
+}
+
+// Full-screen sheet over the holding page; closes with ✕.
+function ReportSheet({ onClose, children }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+  // Portalled to <body>: inside the holding page it would share that page's stacking layer
+  // and the bottom nav (painted later at the same z-index) would cover it.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-paper overflow-y-auto max-w-lg mx-auto animate-fade-in">
+      <div className="sticky top-0 z-10 bg-paper px-6 pt-12 pb-2.5 flex items-center justify-between border-b border-ink">
+        <span className="font-serif-i text-[24px] leading-none">Research note</span>
+        <button onClick={onClose} aria-label="Close report"
+          className="w-9 h-9 rounded-xl border-[1.5px] border-ink flex items-center justify-center text-lg active:scale-90">✕</button>
+      </div>
+      <div className="px-6 pb-16">{children}</div>
+    </div>,
+    document.body,
   )
 }
 
@@ -124,7 +180,7 @@ function Report({ latest, name, symbol }) {
         <span className="truncate pr-3">EQUITY RESEARCH · {(snap.theme || snap.industry || 'INDIA').toUpperCase()}</span>
         <span className="shrink-0">{when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}</span>
       </div>
-      <div className="font-serif-n text-[32px] leading-none mt-2">{name}</div>
+      <div className="font-serif-n text-[32px] leading-none mt-2">{tidyName(name)}</div>
       <div className="text-[11.5px] text-ink/50 mt-1">{symbol}{snap.sector ? ` · ${snap.sector}` : ''}</div>
 
       {/* rating box */}
