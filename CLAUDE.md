@@ -101,7 +101,7 @@ Home's "As it happens" timeline (`DailyBrief.jsx`) and the full **News** sub-pag
 The welcome tour can load a full sample dataset. Every seeded record is tagged `demo: true`; `db.clearDemoData()` removes **only** tagged records, so the user's own entries are never touched. Demo auto-expires 24h after load (checked at launch via `demoLoadedAt`). Never write a `demo` flag onto real user records.
 
 ### Navigation (`src/App.jsx` + `src/components/layout/BottomNav.jsx`)
-No router — a `page` string in `App.jsx` switches the rendered page. Bottom nav: HOME · STATS · MONEY · BUDGET · SETTINGS. `SUB_PAGES` (`udhaar`, `portfolio`, `expenses`, `ask`) render full-screen with a back button and keep their originating tab highlighted via `returnTo`. `NO_FAB` lists pages where the add-expense FAB is hidden.
+No router — a `page` string in `App.jsx` switches the rendered page. Bottom nav: HOME · STATS · MONEY · BUDGET · SETTINGS. `SUB_PAGES` (`udhaar`, `portfolio`, `expenses`, `ask`) render full-screen with a back button and keep their originating tab highlighted via `returnTo`. `NO_FAB` lists pages where the add-expense FAB is hidden. Both floating buttons (+ and, on Home, the 🪄 Ask button above it) slide away while the page scrolls down (`fabHidden` in `App.jsx`) and return on scroll-up, after ~0.9 s idle, or on a page change — so they never sit over the news and journal being read.
 
 ## Design system (editorial "paper" theme)
 - Colors: paper `#F5F0E4`, ink `#1B1710`, rust/brand `#D9481C`, green `#4E9E6A`; on-dark variants green `#84C79B`, rust `#F0844F`.
