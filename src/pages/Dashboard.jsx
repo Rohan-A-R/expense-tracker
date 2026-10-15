@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext'
 import { getSetting, setSetting } from '../services/db'
 import ExpenseCard from '../components/expenses/ExpenseCard'
 import ExpenseForm from '../components/expenses/ExpenseForm'
+import DailyBrief from '../components/news/DailyBrief'
 import { formatCurrency, formatMonth, getWeekRange, currentFinMonth } from '../utils/formatters'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -10,7 +11,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const INK = '#1B1710', RUST = '#D9481C', GREEN = '#4E9E6A'
 
 
-export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends }) {
+export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends, onOpenNews }) {
   const { expenses, budgets, udhaar, holdings, prices, monthStartDay } = useApp()
   const [editExpense, setEditExpense] = useState(null)
 
@@ -254,6 +255,9 @@ export default function Dashboard({ onOpenUdhaar, onOpenPortfolio, onOpenSpends 
           </div>
         )}
       </button>
+
+      {/* Today's news — three headlines; the full front page is a tap away */}
+      <DailyBrief onOpenAll={onOpenNews} />
 
       {/* The journal — latest spends, grouped by day */}
       <div className="flex items-baseline justify-between mt-7">

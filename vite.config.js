@@ -41,6 +41,17 @@ function yahooDevProxy() {
         } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }
       })
       // Google News RSS (India) — keyless headlines; XML has no CORS headers so proxy it.
+      // Publisher RSS feeds for the Home news brief (whitelisted hosts only).
+      server.middlewares.use('/news-feed', async (req, res) => {
+        try {
+          const u = new URL(new URL(req.url, 'http://x').searchParams.get('u') || '')
+          const ok = ['feeds.feedburner.com', 'timesofindia.indiatimes.com', 'www.thehindu.com', 'feeds.bbci.co.uk', 'economictimes.indiatimes.com']
+          if (!ok.includes(u.hostname)) { res.statusCode = 403; return res.end('host not allowed') }
+          const r = await fetch(u, { headers: { 'User-Agent': YUA } })
+          res.setHeader('content-type', 'application/xml')
+          res.end(await r.text())
+        } catch (e) { res.statusCode = 502; res.end(String(e)) }
+      })
       server.middlewares.use('/gnews', async (req, res) => {
         try {
           const q = new URL(req.url, 'http://x').searchParams.get('q') || ''

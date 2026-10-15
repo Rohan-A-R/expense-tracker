@@ -85,6 +85,25 @@ export async function fetchStockDomain(symbol, name) {
 
 // ---- News: Google News RSS (India), keyless. Native hits Google directly; the browser
 // goes through the Vite /gnews proxy (RSS has no CORS headers). Parsed to plain items. ----
+// A story's photo, from whichever tag the publisher uses: media:content / media:thumbnail
+// (BBC, NDTV), an image <enclosure> (Times of India, Economic Times) or an <img> in the
+// description. getElementsByTagName matches the prefixed name in an XML document.
+function imageOf(n) {
+  const attr = (tag) => [...n.getElementsByTagName(tag)].map(e => e.getAttribute('url')).find(Boolean)
+  let url = attr('media:content') || attr('media:thumbnail')
+  if (!url) {
+    const enc = [...n.getElementsByTagName('enclosure')].find(e => /image/.test(e.getAttribute('type') || 'image'))
+    url = enc?.getAttribute('url')
+  }
+  if (!url) {
+    const html = n.querySelector('description')?.textContent || n.getElementsByTagName('content:encoded')[0]?.textContent || ''
+    url = html.match(/<img[^>]+src=["']([^"']+)/i)?.[1]
+  }
+  if (!url || !/^https?:/.test(url)) return null
+  if (/ndtvimg\.com/.test(url)) return null        // NDTV's CDN refuses off-site requests (403)
+  return url.replace(/&amp;/g, '&')
+}
+
 function parseRss(xml, count) {
   const out = []
   try {
@@ -93,11 +112,12 @@ function parseRss(xml, count) {
       if (out.length >= count) break
       const source = n.querySelector('source')?.textContent?.trim() || ''
       let title = (n.querySelector('title')?.textContent || '').trim()
+      // Google News appends " - Outlet"; publisher feeds don't, and their titles can contain " - "
       if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -(source.length + 3))
-      else title = title.replace(/\s-\s[^-]+$/, '')
+      else if (source) title = title.replace(/\s-\s[^-]+$/, '')
       const link = n.querySelector('link')?.textContent?.trim() || ''
-      const pub = n.querySelector('pubDate')?.textContent?.trim() || ''
-      if (title) out.push({ title, source, link, publishedAt: pub })
+      const pub = (n.querySelector('pubDate')?.textContent || n.querySelector('updated')?.textContent || '').trim()
+      if (title) out.push({ title, source, link, publishedAt: pub, image: imageOf(n) })
     }
   } catch { /* malformed feed → empty */ }
   return out
@@ -113,6 +133,69 @@ export async function fetchNews(query, count = 6) {
     const xml = typeof res.data === 'string' ? res.data : String(res.data || '')
     return parseRss(xml, count)
   })
+}
+
+// ---- The Daily Brief (Home): today's headlines across sections ----
+// Google News section feeds, merged: each story tagged with its section, anything older than
+// 24 hours dropped, near-duplicate titles removed (the same story runs in several sections).
+// Cached for 30 minutes rather than daily — the point is today's news.
+// Publisher feeds rather than Google News for the brief: Google's feed carries no images,
+// these all do. Order within a feed is the publisher's own (top stories first).
+export const NEWS_SECTIONS = [
+  { key: 'india', label: 'India', feeds: [
+    ['NDTV', 'https://feeds.feedburner.com/ndtvnews-top-stories'],
+    ['The Times of India', 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms'],
+    ['The Hindu', 'https://www.thehindu.com/news/national/feeder/default.rss'],
+  ] },
+  { key: 'world', label: 'World', feeds: [['BBC', 'https://feeds.bbci.co.uk/news/world/rss.xml']] },
+  { key: 'markets', label: 'Markets', feeds: [
+    ['The Economic Times', 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms'],
+    ['BBC', 'https://feeds.bbci.co.uk/news/business/rss.xml'],
+  ] },
+  { key: 'tech', label: 'Tech', feeds: [
+    ['Gadgets 360', 'https://feeds.feedburner.com/gadgets360-latest'],
+    ['BBC', 'https://feeds.bbci.co.uk/news/technology/rss.xml'],
+  ] },
+]
+// Some feeds repeat the outlet after the headline in a longer form than <source>
+// ("… - GSMArena.com news" for source "GSMArena.com"). Cut a trailing " - …" that names it.
+function dropSiteSuffix(title, source) {
+  const m = title.match(/^(.*\S)\s+[-–|]\s+([^-–|]+)$/)
+  const word = (source || '').split(/[\s.]/)[0].toLowerCase()
+  return m && word && m[2].toLowerCase().includes(word) ? m[1] : title
+}
+let _brief = null
+export async function fetchHeadlines({ force = false } = {}) {
+  if (!force && _brief && Date.now() - _brief.at < 30 * 60000) return _brief.items
+  const jobs = NEWS_SECTIONS.flatMap(sec => sec.feeds.map(([source, feed]) => ({ sec, source, feed })))
+  const sets = await Promise.all(jobs.map(async ({ sec, source, feed }) => {
+    try {
+      const url = Capacitor.isNativePlatform() ? feed : `/news-feed?u=${encodeURIComponent(feed)}`
+      const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': YUA }, connectTimeout: 12000, readTimeout: 12000 })
+      const xml = typeof res.data === 'string' ? res.data : String(res.data || '')
+      return parseRss(xml, 20).map((n, rank) => ({
+        ...n, source: n.source || source, title: dropSiteSuffix(n.title, n.source || source), section: sec.key, rank,
+      }))
+    } catch { return [] }
+  }))
+  const cutoff = Date.now() - 24 * 3600e3
+  const seen = new Set(), items = []
+  const norm = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3).slice(0, 6).join(' ')
+  for (const n of sets.flat()) {
+    const t = new Date(n.publishedAt).getTime()
+    if (!t || t < cutoff) continue
+    const k = norm(n.title)
+    if (seen.has(k)) continue
+    seen.add(k); items.push({ ...n, at: t })
+  }
+  // Google's own ranking within each section, interleaved across sections (India #1,
+  // World #1, Markets #1, Tech #1, India #2…) — the lead is the most important story,
+  // not merely the latest, and the list stays mixed.
+  const order = Object.fromEntries(NEWS_SECTIONS.map((s, i) => [s.key, i]))
+  items.sort((a, b) => a.rank - b.rank || order[a.section] - order[b.section])
+  if (!items.length) throw new Error('no headlines')
+  _brief = { items, at: Date.now() }
+  return items
 }
 
 // ---- Market pulse (index/FX ticker for the Portfolio page) ----

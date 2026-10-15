@@ -17,10 +17,11 @@ import Udhaar from './pages/Udhaar'
 import Portfolio from './pages/Portfolio'
 import NetWorth from './pages/NetWorth'
 import AskFinances from './pages/AskFinances'
+import News from './pages/News'
 import ExpenseForm from './components/expenses/ExpenseForm'
 
-const SUB_PAGES = ['udhaar', 'portfolio', 'expenses', 'ask']
-const NO_FAB = ['settings', 'udhaar', 'portfolio', 'networth', 'ask']
+const SUB_PAGES = ['udhaar', 'portfolio', 'expenses', 'ask', 'news']
+const NO_FAB = ['settings', 'udhaar', 'portfolio', 'networth', 'ask', 'news']
 
 function AppContent() {
   const { loading, loadSampleData } = useApp()
@@ -71,7 +72,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-paper max-w-lg mx-auto relative select-none text-ink">
       <main className="pb-24">
-        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} />}
+        {page === 'dashboard' && <Dashboard onOpenUdhaar={() => openSub('udhaar', 'dashboard')} onOpenPortfolio={() => openSub('portfolio', 'dashboard')} onOpenSpends={() => openSub('expenses', 'dashboard')} onOpenNews={() => openSub('news', 'dashboard')} />}
         {page === 'expenses'  && <Expenses onBack={() => setPage(returnTo)} />}
         {page === 'analytics' && <Analytics />}
         {page === 'networth'  && <NetWorth onOpenPortfolio={() => openSub('portfolio', 'networth')} onOpenUdhaar={() => openSub('udhaar', 'networth')} />}
@@ -80,6 +81,7 @@ function AppContent() {
         {page === 'udhaar'    && <Udhaar onBack={() => setPage(returnTo)} />}
         {page === 'portfolio' && <Portfolio onBack={() => setPage(returnTo)} />}
         {page === 'ask'       && <AskFinances onBack={() => setPage(returnTo)} />}
+        {page === 'news'      && <News onBack={() => setPage(returnTo)} />}
       </main>
 
       {/* Ask Finances FAB — matched pair stacked above the + (Home only, opt-in) */}
