@@ -35,6 +35,24 @@ function AppContent() {
 
   useEffect(() => { getSetting('aiEnabled').then(v => setAiOn(v !== false)) }, [])   // on by default
 
+  // The floating buttons step aside while you scroll down (so it never sits on what you're reading)
+  // and comes back when you scroll up or stop for a moment.
+  const [fabHidden, setFabHidden] = useState(false)
+  useEffect(() => {
+    let last = window.scrollY, timer
+    const onScroll = () => {
+      const y = window.scrollY
+      if (y > last + 6 && y > 120) setFabHidden(true)
+      else if (y < last - 6) setFabHidden(false)
+      last = y
+      clearTimeout(timer)
+      timer = setTimeout(() => setFabHidden(false), 900)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(timer) }
+  }, [])
+  useEffect(() => { setFabHidden(false) }, [page])
+
   useEffect(() => {
     Promise.all([getSetting('appPin'), getSetting('appBiometric'), getSetting('lockOnboarded'), getSetting('tourDone')])
       .then(async ([hash, bio, onboarded, tourDone]) => {
@@ -84,13 +102,13 @@ function AppContent() {
         {page === 'news'      && <News onBack={() => setPage(returnTo)} />}
       </main>
 
-      {/* Ask Finances FAB — matched pair stacked above the + (Home only, opt-in) */}
+      {/* Ask Finances — stacked above the +, and steps aside with it while scrolling */}
       {aiOn && page === 'dashboard' && (
         <button
           onClick={() => openSub('ask', 'dashboard')}
           aria-label="Ask Finances"
-          className="fixed bottom-[160px] right-5 z-30 w-14 h-14 rounded-[17px] flex items-center justify-center active:scale-90 transition-transform duration-100"
-          style={{ background: '#6C5FB0', boxShadow: '0 14px 28px -8px rgba(108,95,176,.5)' }}
+          className="fixed bottom-[160px] right-5 z-30 w-14 h-14 rounded-[17px] flex items-center justify-center active:scale-90 transition-[transform,opacity] duration-200"
+          style={{ background: '#6C5FB0', boxShadow: '0 14px 28px -8px rgba(108,95,176,.5)', ...(fabHidden ? { transform: 'translateY(210px)', opacity: 0, pointerEvents: 'none' } : null) }}
         >
           <span className="text-[22px] leading-none">🪄</span>
         </button>
@@ -101,8 +119,8 @@ function AppContent() {
         <button
           onClick={() => setShowAdd(true)}
           aria-label="Add expense"
-          className="fixed bottom-[92px] right-5 z-30 w-14 h-14 rounded-[17px] bg-ink flex items-center justify-center active:scale-90 transition-transform duration-100"
-          style={{ boxShadow: '0 14px 28px -8px rgba(27,23,16,.55)' }}
+          className="fixed bottom-[92px] right-5 z-30 w-14 h-14 rounded-[17px] bg-ink flex items-center justify-center active:scale-90 transition-[transform,opacity] duration-200"
+          style={{ boxShadow: '0 14px 28px -8px rgba(27,23,16,.55)', ...(fabHidden ? { transform: 'translateY(140px)', opacity: 0, pointerEvents: 'none' } : null) }}
         >
           <span className="text-paper text-3xl font-light leading-none -mt-0.5">+</span>
         </button>
