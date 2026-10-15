@@ -8,6 +8,11 @@ const browser = await browser_()
 async function browser_() { return chromium.launch({ executablePath: CHROME }) }
 const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage()
 await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+// wait until the app has created its stores (a fresh browser profile opens an empty DB)
+await page.waitForFunction(async () => {
+  const db = await new Promise(ok => { const r = indexedDB.open('ExpenseTrackerDB'); r.onsuccess = () => ok(r.result) })
+  const ready = db.objectStoreNames.contains('settings'); db.close(); return ready
+}, null, { timeout: 20000 })
 await page.evaluate(async () => {
   const { buildDemoData } = await import('/src/utils/demoData.js')
   const d = buildDemoData()

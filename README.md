@@ -28,7 +28,7 @@ An offline-first personal finance app: track spending, budgets, investments, gol
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/frames/home.png?v=3" width="215"/><br/><b>Home</b><br/><sub>Budget, journal & portfolio</sub></td>
+    <td align="center"><img src="docs/frames/home.png?v=4" width="215"/><br/><b>Home</b><br/><sub>Budget, journal & portfolio</sub></td>
     <td align="center"><img src="docs/frames/money.png?v=2" width="215"/><br/><b>Net worth</b><br/><sub>Everything you own & owe</sub></td>
     <td align="center"><img src="docs/frames/portfolio.png?v=2" width="215"/><br/><b>Portfolio</b><br/><sub>Live stocks & mutual funds</sub></td>
   </tr>
@@ -126,6 +126,11 @@ One tap on any stock holding produces a full research report — score (0–100)
 - **Numbers stay honest** — every figure is computed on-device and handed to the model as a finished total, so it phrases and explains but never does the math
 - **No API key in the app** — requests go through a Cloudflare Worker proxy; the model provider key lives server-side
 - **Opt-in, on by default** — a data summary leaves the device *only* when you tap Ask or Recap; toggle it off anytime in Settings
+
+### 📰 As it happens (daily news)
+- **Today's news on Home** — the top story from India, World, Markets and Tech on a live timeline, with photos
+- **Full front page** — every story from the last 24 hours, filterable by section, from NDTV, The Times of India, The Hindu, BBC, The Economic Times and Gadgets 360
+- **Light on data** — refreshed at most every 30 minutes, right-sized photos, last batch kept for offline; no photos are stored and news never enters your data or backups
 
 ### 🤝 Lend & borrow
 - **Udhaar ledger** — track who owes you and who you owe, netted per person, with settle-up and history
@@ -230,7 +235,7 @@ scripts/                # dev-only Playwright probes for the stock-analysis pipe
 
 No sign-up. No backend for your data. No telemetry. Your expenses, budgets, balances and PIN live in IndexedDB on your phone.
 
-The app makes network requests in just a few cases: to fetch live investment/metal prices and market news (only when you hold something priced), and — if you use the AI features — to the AI assistant:
+The app makes network requests in just a few cases: to fetch live investment/metal prices and market news (only when you hold something priced), today's headlines for the Home news brief, and — if you use the AI features — to the AI assistant:
 - **Ask Finances / AI Recap** send a summary of your data (aggregates + recent transactions).
 - **Stock analysis** sends public market data for that stock plus your position in it (quantity, average cost, share of portfolio) — nothing about your spending.
 
