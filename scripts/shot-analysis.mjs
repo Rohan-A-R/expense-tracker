@@ -6,31 +6,15 @@ const CHROME = process.env.HOME + '/.cache/ms-playwright/chromium-1223/chrome-li
 //   readmeFrame.png  — that first screen in a phone frame, 680×1440 (docs/frames/analysis.png)
 const [OUT = '/tmp/analysis.png', TOUR_OUT, FRAME_OUT] = process.argv.slice(2)
 
-// Sample model reply — stands in for the Worker until OpenRouter credit exists.
-// Everything else on screen (key data, peers, position, rating history prices) is real.
-const REPORT = {
-  score: 52, verdict: 'WATCH',
-  headline: 'Steel prices are rising, but profits and estimates are moving the wrong way',
-  technicals: 'Price sits below both its 50- and 200-day averages, a bearish setup, though MACD turned bullish two days ago. RSI near 40 says momentum is soft but not oversold.',
-  valuation: 'At a P/E of about 20 it trades well above JSW Steel and SAIL, its closest peers by size, so it is not the bargain its falling price suggests.',
-  earnings: 'Revenue jumped 58% last quarter but net profit fell 21% and margins halved to 3.8%. It has missed analyst estimates in 3 of the last 4 quarters. Next results are due 11 Nov 2026.',
-  // (no exact P&L / weight figures — the box above shows those live)
-  position: 'Your holding is comfortably in profit, and at nearly a fifth of your portfolio it is one of your larger single bets. The nearest support sits just below the current price.',
-  sector: 'Steel HRC futures are up sharply over the year while iron ore is lower, which should widen margins across the industry, and a 12% safeguard tariff shields domestic mills.',
-  catalysts: ['12% safeguard tariff on Chinese steel imports', 'HRC steel futures up strongly over the year', 'Brokers mostly positive: 18 buy against 7 sell'],
-  risks: ['Missed EPS estimates 3 of the last 4 quarters', 'Net margin halved to 3.8%', 'Rich P/E against size-matched peers'],
-  levels: 'Nearest support sits just below the price, with resistance a few rupees above; a close above it would turn the short-term trend.',
-  verdictText: 'Industry conditions are improving, but Tata Steel is not converting them into profit yet, and the valuation already assumes it will. Worth watching the 11 Nov results before reading more into the rally.',
-  missing: [],
-}
+// Uses the live Worker (real AI) — research notes since method v2 must carry claims that
+// cite the real fact book, so a canned reply can't stand in any more. Costs ~₹0.1 a run.
 
 const browser = await chromium.launch({ executablePath: CHROME })
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
 const page = await ctx.newPage()
-await page.route('**/throbbing-base-fd72.rohanflash27.workers.dev/**', r =>
-  r.fulfill({ status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ text: JSON.stringify(REPORT) }) }))
 
 await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+await page.waitForFunction(async () => { const db = await new Promise(ok => { const r = indexedDB.open('ExpenseTrackerDB'); r.onsuccess = () => ok(r.result) }); const ready = db.objectStoreNames.contains('settings'); db.close(); return ready }, null, { timeout: 20000 })
 await page.evaluate(async () => {
   const db = await new Promise((ok, no) => { const r = indexedDB.open('ExpenseTrackerDB'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error) })
   const put = (s, v) => new Promise(ok => { const t = db.transaction(s, 'readwrite'); t.objectStore(s).put(v); t.oncomplete = ok })
@@ -51,25 +35,19 @@ await page.getByText('PORTFOLIO', { exact: true }).first().click()
 await page.waitForTimeout(1500)
 await page.getByText('Tata Steel').first().click()
 
-const card = page.locator('section', { hasText: 'AI ANALYSIS' }).first()
 await page.getByText('Analyse this stock', { exact: true }).click()
-await page.getByText('INVESTMENT SUMMARY').waitFor({ timeout: 120000 })
-await page.waitForTimeout(1000)
-
-// First screen of the report: masthead, rating box, headline, summary, key data.
-await card.evaluate(el => {
-  const scroller = el.closest('.overflow-y-auto')
-  scroller.scrollTop += el.getBoundingClientRect().top - 12
-})
-await page.waitForTimeout(500)
+await page.getByText('Research note').waitFor({ timeout: 240000 })
+await page.waitForTimeout(1500)
+const sheet = page.locator('body > div').last()
 const first = await page.screenshot()
 if (TOUR_OUT) { await page.screenshot({ path: TOUR_OUT, type: 'jpeg', quality: 86 }); console.log('tour', TOUR_OUT) }
 
-// Whole card, with the bottom bar out of the way.
-await page.addStyleTag({ content: 'nav, .fixed.bottom-0 { display:none !important }' })
-await page.setViewportSize({ width: 390, height: 5200 })
+// whole note, sticky header unpinned
+await page.addStyleTag({ content: '.sticky { position: static !important }' })
+const h = await sheet.evaluate(el => el.scrollHeight)
+await page.setViewportSize({ width: 390, height: Math.min(h + 20, 12000) })
 await page.waitForTimeout(800)
-await card.screenshot({ path: OUT })
+await page.screenshot({ path: OUT })
 console.log('saved', OUT)
 
 if (FRAME_OUT) {
