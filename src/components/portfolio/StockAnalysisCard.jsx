@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { analyseStock } from '../../services/stockAnalysis'
-import { loadAnalysis, saveAnalysis } from '../../services/analysisStore'
+import { analyseStock, VERDICTS, PILLARS } from '../../services/stockAnalysis'
+import { loadAnalysis, saveAnalysis, evaluateCalls, verdictKey, HORIZONS } from '../../services/analysisStore'
+import { fetchStockChart } from '../../services/marketData'
+import { showValue } from '../../services/research/facts'
 
 // On-demand AI stock analysis, styled as an ordinary section of the holding page (same
 // headings, rules and serif figures as ABOUT / NEWS) rather than a separate widget.
@@ -10,7 +12,9 @@ import { loadAnalysis, saveAnalysis } from '../../services/analysisStore'
 // stockAnalysis.js (computed on-device); the model supplies judgement and wording only.
 // A report is saved for 7 days (analysisStore.js) and every call is kept in a track record.
 
-const VERDICT_COLOR = { BUY: '#4E9E6A', WATCH: '#B5761F', AVOID: '#D9481C' }
+const VERDICT_COLOR = { POSITIVE: '#4E9E6A', NEUTRAL: '#B5761F', NEGATIVE: '#D9481C', INSUFFICIENT: '#8A8070' }
+const vColor = (v) => VERDICT_COLOR[verdictKey(v)] || VERDICT_COLOR.NEUTRAL
+const vLabel = (v) => VERDICTS[verdictKey(v)] || v
 const H = 'text-[11px] font-bold tracking-[2px] text-ink/55 rule-ink pb-2'
 
 const inr = (v) => `₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`
@@ -71,8 +75,10 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
       {/* The full note opens in its own sheet so the holding page stays short. */}
       {open && latest && (
         <ReportSheet onClose={() => setOpen(false)}>
-          <Report latest={latest} name={name} symbol={symbol} />
-          <TrackRecord history={history} currentPrice={currentPrice} />
+          {latest.report?.version === 2
+            ? <ResearchNote latest={latest} name={name} symbol={symbol} />
+            : <Report latest={latest} name={name} symbol={symbol} />}
+          <TrackRecord history={history} currentPrice={currentPrice} symbol={symbol} />
         </ReportSheet>
       )}
     </section>
@@ -82,21 +88,22 @@ export default function StockAnalysisCard({ symbol, name, position, currentPrice
 // ---- on the holding page: just the verdict and a way in ----
 function Summary({ latest, onOpen }) {
   const r = latest.report
-  const color = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.WATCH
+  const color = vColor(r.verdict)
+  const insufficient = verdictKey(r.verdict) === 'INSUFFICIENT'
   return (
     <button onClick={onOpen} className="w-full text-left pt-4 pb-1 active:opacity-80">
       <div className="flex items-stretch border-y-[1.5px] border-ink">
         <div className="px-3 py-2.5 flex flex-col justify-center" style={{ background: color, color: '#F5F0E4', margin: '-1.5px 0' }}>
-          <div className="text-[8.5px] font-bold tracking-[1.5px] opacity-80">RATING</div>
-          <div className="text-[15px] font-bold tracking-[1.8px]">{r.verdict}</div>
+          <div className="text-[8.5px] font-bold tracking-[1.5px] opacity-80">ASSESSMENT</div>
+          <div className={`${insufficient ? 'text-[12px] leading-tight' : 'text-[15px]'} font-bold tracking-[1.2px] uppercase`}>{vLabel(r.verdict)}</div>
         </div>
         <div className="px-3.5 py-2.5 flex flex-col justify-center" style={{ borderRight: '1px dotted rgba(27,23,16,.3)' }}>
           <div className="text-[8.5px] font-bold tracking-[1.5px] text-ink/50">SCORE</div>
           <div className="font-serif-n text-[20px] leading-tight">{r.score ?? '—'}<span className="text-[12px] text-ink/40"> / 100</span></div>
         </div>
         <div className="px-3.5 py-2.5 flex flex-col justify-center min-w-0">
-          <div className="text-[8.5px] font-bold tracking-[1.5px] text-ink/50">NOTE OF</div>
-          <div className="text-[13px] font-semibold">{day(latest.generatedAt)}</div>
+          <div className="text-[8.5px] font-bold tracking-[1.5px] text-ink/50">{r.coverage != null ? 'EVIDENCE' : 'NOTE OF'}</div>
+          <div className="text-[13px] font-semibold">{r.coverage != null ? `${Math.round(r.coverage * 100)}% · ${day(latest.generatedAt)}` : day(latest.generatedAt)}</div>
         </div>
       </div>
       {r.headline && <p className="font-serif-i text-[20px] leading-snug mt-3.5">{r.headline}</p>}
@@ -133,7 +140,7 @@ function Intro({ state, step, err, stale, onRun }) {
     return (
       <div className="py-5">
         <p className="font-serif-i text-[20px] leading-snug">{step}…</p>
-        <p className="text-[12px] text-ink/45 mt-1">Gathering prices, peers, sector drivers and news. This takes a few seconds.</p>
+        <p className="text-[12px] text-ink/45 mt-1">Gathering four years of financials, prices, comparable companies, sector drivers and news — then scoring and checking the evidence. About 20–30 seconds.</p>
       </div>
     )
   }
@@ -142,7 +149,7 @@ function Intro({ state, step, err, stale, onRun }) {
       <p className="text-[13.5px] leading-relaxed text-ink/80">
         {state === 'error'
           ? err || 'The analysis could not be completed.'
-          : 'A research note on this stock in context — its sector and price drivers, comparable competitors, quarterly results and the latest news.'}
+          : 'A research note built from evidence: four years of financials, valuation against comparable companies and its own history, market behaviour and risk — scored by fixed rules, explained by AI, every figure checked.'}
       </p>
       {stale && state !== 'error' && (
         <p className="text-[12px] text-ink/45 mt-2">Last analysed {day(stale.generatedAt)} — reports are kept for 7 days.</p>
@@ -165,7 +172,7 @@ const rowB = { borderTop: '1px dotted rgba(27,23,16,.28)' }
 
 function Report({ latest, name, symbol }) {
   const r = latest.report, m = latest.meta, snap = m.snapshot || {}
-  const color = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.WATCH
+  const color = vColor(r.verdict)
   const when = new Date(latest.generatedAt)
   const upside = snap.target && m.price ? ((snap.target - m.price) / m.price) * 100 : null
   const sections = [
@@ -187,7 +194,7 @@ function Report({ latest, name, symbol }) {
       <div className="grid grid-cols-3 mt-4 border-y-[1.5px] border-ink">
         <div className="py-3 pr-3 flex flex-col justify-center" style={{ background: color, color: '#F5F0E4', margin: '-1.5px 0' }}>
           <div className="text-[9px] font-bold tracking-[1.6px] opacity-80 pl-3">RATING</div>
-          <div className="text-[17px] font-bold tracking-[2px] pl-3 mt-0.5">{r.verdict}</div>
+          <div className="text-[17px] font-bold tracking-[2px] pl-3 mt-0.5 uppercase">{vLabel(r.verdict)}</div>
         </div>
         <Cell label="SCORE" value={<>{r.score ?? '—'}<span className="text-[13px] text-ink/40"> / 100</span></>} />
         <Cell label="PRICE AT NOTE" value={m.price ? price2(m.price) : '—'} last />
@@ -356,35 +363,265 @@ function Holding({ pos, text }) {
   )
 }
 
-// ---- how past calls played out ----  (a broker note's "rating history")
-function TrackRecord({ history, currentPrice }) {
+// ---- how past calls played out ----  (rating history + evaluation)
+// Each call's outcome at 1 and 3 months, once that much time has passed: the stock's move
+// from the call's price, and the difference against NIFTY over the same window. Calls are
+// never judged on horizons that haven't happened yet.
+function TrackRecord({ history, currentPrice, symbol }) {
+  const [series, setSeries] = useState(null)
+  useEffect(() => {
+    let off = false
+    if (!history?.length) return
+    Promise.all([fetchStockChart(symbol, '1Y').catch(() => null), fetchStockChart('^NSEI', '1Y').catch(() => null)])
+      .then(([a, b]) => { if (!off) setSeries({ stock: a?.series || [], nifty: b?.series || [] }) })
+    return () => { off = true }
+  }, [symbol, history?.length])
   if (!history?.length) return null
+  const rows = evaluateCalls(history, series?.stock, series?.nifty)
+  const show = ['1M', '3M']
+  const fmt = (o) => o?.excess != null ? signed(o.excess) : o?.ret != null ? signed(o.ret) : '—'
+  const col = (o) => (o?.excess ?? o?.ret) == null ? 'rgba(27,23,16,.35)' : (o.excess ?? o.ret) >= 0 ? GREEN : RUST
+  const matured = rows.filter(h => h.outcomes['1M']?.excess != null)
+  const hits = matured.filter(h => {
+    const k = verdictKey(h.verdict), x = h.outcomes['1M'].excess
+    return (k === 'POSITIVE' && x > 0) || (k === 'NEGATIVE' && x < 0) || (k === 'NEUTRAL' && Math.abs(x) <= 5)
+  }).length
   return (
     <div className="mt-7">
       <SecHead>Rating history</SecHead>
-      <div className="flex gap-3 text-[9px] font-bold tracking-[1.3px] text-ink/45 pt-2 pb-1">
-        <span className="w-14">DATE</span><span className="w-16">RATING</span><span>SCORE</span>
-        <span className="flex-1 text-right">PRICE</span><span className="w-14 text-right">SINCE</span>
+      <div className="grid grid-cols-[56px_1fr_34px_60px_54px] gap-x-2 text-[9px] font-bold tracking-[1.2px] text-ink/45 pt-2 pb-1">
+        <span>DATE</span><span>CALL</span><span>SCORE</span><span className="text-right">1M vs NIFTY</span><span className="text-right">3M</span>
       </div>
-      {history.map(h => {
-        // A call under a day old has had no time to play out — comparing it is just noise.
-        const fresh = Date.now() - new Date(h.at).getTime() < 864e5
-        const move = !fresh && currentPrice && h.price ? ((currentPrice - h.price) / h.price) * 100 : null
-        const color = VERDICT_COLOR[h.verdict] || 'inherit'
-        return (
-          <div key={h.at} className="flex items-baseline gap-3 py-2.5 text-[13px]" style={rowB}>
-            <span className="w-14 text-ink/55 shrink-0">{day(h.at)}</span>
-            <span className="w-16 shrink-0 text-[11px] font-bold tracking-[1.5px]" style={{ color }}>{h.verdict}</span>
-            <span className="text-ink/55 shrink-0">{h.score}</span>
-            <span className="flex-1 text-right text-ink/70 truncate">{h.price ? price2(h.price) : '—'}</span>
-            <span className="w-14 text-right font-semibold shrink-0"
-              style={{ color: move == null ? 'rgba(27,23,16,.4)' : move >= 0 ? GREEN : RUST }}>
-              {move != null ? signed(move) : fresh ? 'today' : '—'}
+      {rows.map(h => (
+        <div key={h.at} className="grid grid-cols-[56px_1fr_34px_60px_54px] gap-x-2 items-baseline py-2.5 text-[12.5px]" style={rowB}>
+          <span className="text-ink/55">{day(h.at)}</span>
+          <span className="text-[10px] font-bold tracking-[1.2px] uppercase truncate" style={{ color: vColor(h.verdict) }}>{vLabel(h.verdict)}</span>
+          <span className="text-ink/55">{h.score ?? '—'}</span>
+          {show.map(k => (
+            <span key={k} className="text-right font-semibold" style={{ color: col(h.outcomes[k]) }}>
+              {h.outcomes[k] ? fmt(h.outcomes[k]) : <span className="text-ink/30 font-normal">pending</span>}
             </span>
+          ))}
+        </div>
+      ))}
+      <p className="text-[11px] text-ink/40 mt-1.5 leading-snug">
+        Outcome = the stock’s move after the call minus NIFTY’s over the same window, measured only once that window has passed.
+        {matured.length >= 3 ? ` So far ${hits} of ${matured.length} one-month outcomes agreed with the call.` : ' Too few matured calls to judge the method yet.'}
+        {currentPrice ? ` Today ${price2(currentPrice)}.` : ''}
+      </p>
+    </div>
+  )
+}
+
+// ================= the research note (method v2) =================
+// Order follows a research analyst's working note: thesis → scorecard → key data →
+// quality → risk → valuation → market → catalysts → what would change the view →
+// data quality → the reader's own position → evidence. Scores and the assessment are the
+// code's; the prose is the model's, kept only where its figures match the evidence.
+function ResearchNote({ latest, name, symbol }) {
+  const r = latest.report, m = latest.meta, snap = m.snapshot || {}
+  const color = vColor(r.verdict)
+  const when = new Date(latest.generatedAt)
+  const facts = m.facts || []
+  const byId = Object.fromEntries(facts.map(f => [f.id, f]))
+  const upside = snap.target && m.price ? ((snap.target - m.price) / m.price) * 100 : null
+  const sections = [
+    ['Business quality', r.quality], ['Financial risk', r.risk],
+    ['Valuation', r.valuation, <ValuationExtras key="v" r={r} price={m.price} snap={snap} name={name} />],
+    ['Market behaviour', r.market], ['Catalysts', r.catalysts], ['What would change this view', r.invalidation],
+  ]
+  const cited = [...new Set(['thesis', 'quality', 'risk', 'valuation', 'market', 'catalysts', 'invalidation', 'position'].flatMap(k => (r[k] || []).flatMap(c => c.ids)))]
+
+  return (
+    <div className="pt-4">
+      <div className="flex justify-between text-[9.5px] font-bold tracking-[1.8px] text-ink/50">
+        <span className="truncate pr-3">EQUITY RESEARCH · {(snap.theme || snap.industry || 'INDIA').toUpperCase()}</span>
+        <span className="shrink-0">{when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}</span>
+      </div>
+      <div className="font-serif-n text-[32px] leading-none mt-2">{tidyName(name)}</div>
+      <div className="text-[11.5px] text-ink/50 mt-1">{symbol}{snap.sector ? ` · ${snap.sector}` : ''}{r.model ? ` · ${MODEL_NAME[r.model] || r.model} model` : ''}</div>
+
+      <div className="grid grid-cols-3 mt-4 border-y-[1.5px] border-ink">
+        <div className="py-3 pr-2 flex flex-col justify-center" style={{ background: color, color: '#F5F0E4', margin: '-1.5px 0' }}>
+          <div className="text-[9px] font-bold tracking-[1.6px] opacity-80 pl-3">ASSESSMENT</div>
+          <div className={`font-bold pl-3 mt-0.5 uppercase leading-tight ${verdictKey(r.verdict) === 'INSUFFICIENT' ? 'text-[12px] tracking-[0.8px]' : 'text-[16px] tracking-[1.6px]'}`}>{vLabel(r.verdict)}</div>
+        </div>
+        <Cell label="SCORE" value={<>{r.score ?? '—'}<span className="text-[13px] text-ink/40"> / 100</span></>} />
+        <Cell label="EVIDENCE" value={r.coverage != null ? `${Math.round(r.coverage * 100)}%` : '—'} last />
+      </div>
+      {r.reasons?.length > 0 && (
+        <p className="text-[12px] leading-snug mt-2.5 px-3 py-2" style={{ background: 'rgba(138,128,112,.12)' }}>
+          <b>Why no verdict:</b> {r.reasons.join('; ')}.
+        </p>
+      )}
+
+      {r.headline && <p className="font-serif-i text-[23px] leading-[1.2] mt-5">{r.headline}</p>}
+
+      {r.thesis?.length > 0 && (
+        <div className="mt-5">
+          <SecHead>Thesis</SecHead>
+          <Claims claims={r.thesis} dropCap={color} />
+        </div>
+      )}
+
+      <Scorecard pillars={r.pillars} />
+      <KeyData snap={snap} price={m.price} upside={upside} />
+
+      {sections.map(([t, claims, extra], i) => (
+        (claims?.length > 0 || extra) ? (
+          <div key={t} className="mt-6">
+            <div className="flex items-baseline gap-3 pb-1.5 border-b border-ink">
+              <span className="font-serif-i text-[22px] leading-none" style={{ color }}>{i + 1}</span>
+              <span className="text-[11px] font-bold tracking-[1.8px]">{t.toUpperCase()}</span>
+            </div>
+            {claims?.length > 0 && <Claims claims={claims} />}
+            {extra}
+          </div>
+        ) : null
+      ))}
+
+      <DataQuality r={r} m={m} />
+
+      {m.position && <Holding pos={m.position} text={(r.position || []).map(c => c.text).join(' ')} />}
+
+      <Evidence facts={facts.filter(f => cited.includes(f.id))} total={facts.length} />
+
+      <div className="mt-6 px-3.5 py-3 text-[10.5px] leading-[1.55] text-ink/50" style={{ background: 'rgba(27,23,16,.045)' }}>
+        <span className="font-bold tracking-[1.2px] text-ink/60">METHOD & DISCLOSURES · </span>
+        Scores and the assessment are computed by fixed rules ({r.method}); the thresholds and weights are starting
+        hypotheses, recorded with every call so they can be tested. An AI model (DeepSeek) writes the explanation; every
+        figure it uses is checked against the recorded evidence and statements that fail are removed. Data from Yahoo
+        Finance, NSE and news outlets, retrieved {new Date(m.fetchedAt || latest.generatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.
+        Governance was not assessed. Research and education only — not investment advice or a recommendation to buy or sell.
+      </div>
+    </div>
+  )
+}
+
+const MODEL_NAME = { bank: 'Bank', nbfc: 'Lender', insurance: 'Insurer', cyclical: 'Cyclical', it: 'IT & services', utility: 'Utility', realty: 'Real estate', general: 'General' }
+
+// Claims as prose; factual ones carry superscript pointers into the evidence list.
+function Claims({ claims, dropCap }) {
+  return (
+    <div className="mt-2.5 space-y-2">
+      {claims.map((c, i) => (
+        <p key={i} className="text-[13.5px] leading-[1.6] text-ink/85">
+          {dropCap && i === 0
+            ? <><span className="font-serif-n float-left text-[44px] leading-[0.85] mr-1.5 mt-1" style={{ color: dropCap }}>{c.text.charAt(0)}</span>{c.text.slice(1)}</>
+            : c.text}
+          {c.ids?.length > 0 && <sup className="ml-1 text-[8.5px] font-bold tracking-[0.5px] text-ink/35">{c.ids.join(' ')}</sup>}
+          {c.type === 'interpretation' && <span className="ml-1 text-[8.5px] font-bold tracking-[0.8px] text-ink/30">VIEW</span>}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function Scorecard({ pillars }) {
+  if (!pillars) return null
+  return (
+    <div className="mt-6">
+      <SecHead>Scorecard</SecHead>
+      {PILLARS.map(([k]) => {
+        const p = pillars[k]
+        if (!p) return null
+        const c = p.score == null ? 'rgba(27,23,16,.2)' : p.score >= 6.5 ? GREEN : p.score < 4.5 ? RUST : '#B5761F'
+        return (
+          <div key={k} className="py-2.5" style={rowB}>
+            <div className="flex justify-between items-baseline">
+              <span className="text-[13px] font-semibold">{p.label}</span>
+              <span className="font-serif-n text-[18px]" style={{ color: p.used ? undefined : 'rgba(27,23,16,.35)' }}>
+                {p.score != null ? p.score.toFixed(1) : '—'}<span className="text-[11px] text-ink/40">/10</span>
+              </span>
+            </div>
+            <div className="h-[5px] mt-1.5" style={{ background: 'rgba(27,23,16,.08)' }}>
+              <div className="h-full" style={{ width: `${(p.score ?? 0) * 10}%`, background: c, opacity: p.used ? 1 : 0.35 }} />
+            </div>
+            <div className="text-[10.5px] text-ink/45 mt-1">
+              data {Math.round(p.coverage * 100)}%{!p.used ? ' · too thin to count towards the score' : ''}
+            </div>
           </div>
         )
       })}
-      <p className="text-[11px] text-ink/40 mt-1.5">Price when each rating was given, and the move to today's {currentPrice ? price2(currentPrice) : 'price'}.</p>
     </div>
+  )
+}
+
+// Valuation range bar (bear–base–bull, price marked) + peers.
+function ValuationExtras({ r, price, snap, name }) {
+  const g = r.range
+  return (
+    <>
+      {g && price ? (() => {
+        const lo = Math.min(g.bear, price) * 0.95, hi = Math.max(g.bull, price) * 1.05
+        const x = (v) => `${((v - lo) / (hi - lo)) * 100}%`
+        return (
+          <div className="mt-3">
+            <div className="text-[9.5px] font-bold tracking-[1.2px] text-ink/45">VALUATION RANGE · {g.basis.toUpperCase()}</div>
+            <div className="relative h-8 mt-2">
+              <div className="absolute top-3 h-2 rounded-full" style={{ left: x(g.bear), width: `calc(${x(g.bull)} - ${x(g.bear)})`, background: 'rgba(181,118,31,.25)' }} />
+              <div className="absolute top-2 h-4 w-[2px]" style={{ left: x(g.base), background: '#B5761F' }} />
+              <div className="absolute top-0.5 w-[3px] h-7 rounded-full bg-ink" style={{ left: x(price) }} />
+            </div>
+            <div className="flex justify-between text-[11px] font-semibold">
+              <span>Low {price2(g.bear)}</span><span style={{ color: '#B5761F' }}>Mid {price2(g.base)}</span><span>High {price2(g.bull)}</span>
+            </div>
+            <div className="text-[10.5px] text-ink/45 mt-0.5">Black mark = today’s {price2(price)}. A range from peer multiples, not a price target.</div>
+          </div>
+        )
+      })() : r.peerThin ? (
+        <p className="text-[12px] text-ink/50 mt-2">Too few comparable companies with usable data for a peer valuation range.</p>
+      ) : null}
+      {snap.peers?.length > 0 && <PeerTable snap={snap} name={name} />}
+    </>
+  )
+}
+
+// What the analysis had, what it lacked, and what the checks removed.
+function DataQuality({ r, m }) {
+  const v = r.validation || {}
+  const missing = (m.missing || []).filter(x => x.pillar !== 'news')
+  const notAssessed = missing.filter(x => /not assessed|filings/.test(x.why))
+  const gaps = missing.filter(x => !/not assessed|filings/.test(x.why))
+  return (
+    <div className="mt-6">
+      <div className="flex items-baseline gap-3 pb-1.5 border-b border-ink">
+        <span className="font-serif-i text-[22px] leading-none text-ink/45">7</span>
+        <span className="text-[11px] font-bold tracking-[1.8px]">DATA QUALITY & UNCERTAINTY</span>
+      </div>
+      <div className="text-[12.5px] leading-[1.55] text-ink/80 mt-2.5 space-y-1.5">
+        <p><b>Evidence coverage {Math.round((r.coverage ?? 0) * 100)}%</b> — the share of scoring inputs that had data. {r.checks?.stale ? 'The latest price is stale. ' : ''}{r.checks?.splitJumps ? `${r.checks.splitJumps} unexplained price jump(s) — possible unadjusted split or bonus. ` : ''}</p>
+        <p><b>AI statements:</b> {v.total ?? 0} written · {v.kept ?? 0} kept{v.repaired ? ` (${v.repaired} re-linked to the right evidence)` : ''} · {v.dropped ?? 0} removed for figures not in the evidence or missing citations.</p>
+        {notAssessed.length > 0 && <p><b>Not assessed:</b> {notAssessed.map(x => x.label).join(', ')} — these need exchange filings and are <i>unknown</i>, not clean.</p>}
+        {gaps.length > 0 && <p><b>Missing data:</b> {gaps.map(x => x.label).join(', ')}.</p>}
+        {r.unknowns?.length > 0 && <div><b>Open questions:</b><ul className="list-disc pl-5 mt-1">{r.unknowns.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
+        {v.droppedClaims?.length > 0 && (
+          <details className="text-[11.5px] text-ink/55"><summary className="cursor-pointer font-semibold">Removed statements</summary>
+            <ul className="list-disc pl-5 mt-1 space-y-1">{v.droppedClaims.map((d, i) => <li key={i}>“{d.text}” — {d.reason}</li>)}</ul>
+          </details>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Evidence({ facts, total }) {
+  if (!facts.length) return null
+  return (
+    <details className="mt-6">
+      <summary className="cursor-pointer text-[11px] font-bold tracking-[1.8px] pb-1.5 border-b border-ink list-none flex justify-between">
+        <span>EVIDENCE CITED ({facts.length} of {total} facts)</span><span className="text-ink/40">SHOW ▾</span>
+      </summary>
+      {facts.map(f => (
+        <div key={f.id} className="py-2 text-[12px]" style={rowB}>
+          <div className="flex justify-between gap-3">
+            <span><span className="font-bold text-ink/40 mr-1.5">{f.id}</span>{f.label}</span>
+            <span className="font-semibold text-right shrink-0">{typeof f.value === 'string' && f.value.length > 40 ? '' : showValue(f)}</span>
+          </div>
+          {typeof f.value === 'string' && f.value.length > 40 && <div className="text-ink/75 mt-0.5">“{f.value}”</div>}
+          <div className="text-[10.5px] text-ink/45 mt-0.5">{[f.period, f.status === 'computed' ? (f.calc || 'computed') : `${f.status} · ${f.source}`].filter(Boolean).join(' · ')}</div>
+        </div>
+      ))}
+    </details>
   )
 }
