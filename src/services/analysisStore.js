@@ -11,7 +11,7 @@ import { getSetting, setSetting } from './db'
 
 const KEY = 'stockAnalyses'
 export const REPORT_TTL_MS = 7 * 24 * 60 * 60 * 1000
-const MAX_HISTORY = 24          // per stock — roughly six months of weekly calls
+const MAX_HISTORY = 60          // per stock — enough calls to evaluate over a year+
 
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString()
 
@@ -69,11 +69,24 @@ export async function saveAnalysis(symbol, res) {
       headlines: c.news.reduce((s, g) => s + g.items.length, 0),
       // A few fixed figures for the report's key-data table (computed, never from the model).
       snapshot: snapshotOf(c),
+      // The evidence the report cites (slim) and what was missing — so the evidence
+      // appendix and data-quality section work offline, exactly as the model saw them.
+      facts: c.facts ? c.facts.facts.map(({ id, label, value, unit, period, source, status, calc, pillar, signed }) =>
+        ({ id, label, value, unit, period, source, status, calc, pillar, signed })) : undefined,
+      missing: c.facts ? c.facts.missing.map(({ label, why, pillar }) => ({ label, why, pillar })) : undefined,
+      peerNames: (c.peers || []).filter(p => !p.isLeader).map(p => p.label),
+      fetchedAt: c.fetchedAt,
     },
   }
+  const r = res.report
+  // One row per call for the track record. Everything needed to evaluate it later is here:
+  // the price and date (outcomes are measured from them), the method version and model
+  // (so changes to the method can be compared), and the pillar scores behind the verdict.
   const call = {
     at: res.generatedAt, price: c.price,
-    score: res.report.score, verdict: res.report.verdict, headline: res.report.headline,
+    score: r.score, verdict: r.verdict, headline: r.headline,
+    version: r.method || 'v1', model: r.model || null, coverage: r.coverage ?? null,
+    pillars: r.pillars ? Object.fromEntries(Object.entries(r.pillars).map(([k, p]) => [k, p.score])) : null,
   }
   // A same-day refresh replaces that day's call rather than stacking duplicates.
   const prev = (all[symbol]?.history || []).filter(h => !sameDay(h.at, call.at))
@@ -81,3 +94,40 @@ export async function saveAnalysis(symbol, res) {
   await setSetting(KEY, all)
   return { latest, history: all[symbol].history }
 }
+
+// ---- evaluation: how past calls played out ----
+// For each call and horizon (1/3/6/12 months), once the horizon has passed: the stock's
+// return from the call's price, NIFTY's return over the same window, and the difference.
+// Uses daily closes (1Y chart) — horizons older than the series are left unevaluated.
+export const HORIZONS = [['1M', 30], ['3M', 91], ['6M', 182], ['12M', 365]]
+
+const closeOn = (series, t) => {
+  // last close on or before t (no peeking at later prices)
+  let best = null
+  for (const b of series) { if (b.t <= t) best = b; else break }
+  return best && t - best.t < 7 * 864e5 ? best.close : null
+}
+
+export function evaluateCalls(history, stockSeries, niftySeries) {
+  if (!stockSeries?.length) return history.map(h => ({ ...h, outcomes: {} }))
+  const first = stockSeries[0].t, now = Date.now()
+  return history.map(h => {
+    const at = new Date(h.at).getTime()
+    const outcomes = {}
+    for (const [k, days] of HORIZONS) {
+      const end = at + days * 864e5
+      if (end > now || at < first) continue
+      const p0 = h.price ?? closeOn(stockSeries, at), p1 = closeOn(stockSeries, end)
+      const n0 = closeOn(niftySeries || [], at), n1 = closeOn(niftySeries || [], end)
+      if (!p0 || !p1) continue
+      const ret = (p1 / p0 - 1) * 100
+      const mkt = n0 && n1 ? (n1 / n0 - 1) * 100 : null
+      outcomes[k] = { ret, mkt, excess: mkt != null ? ret - mkt : null }
+    }
+    return { ...h, outcomes }
+  })
+}
+
+// Normalise old (v1) verdicts for display: BUY/WATCH/AVOID → the research labels.
+export const VERDICT_MAP = { BUY: 'POSITIVE', WATCH: 'NEUTRAL', AVOID: 'NEGATIVE' }
+export const verdictKey = (v) => VERDICT_MAP[v] || v

@@ -198,6 +198,43 @@ export async function fetchHeadlines({ force = false } = {}) {
   return items
 }
 
+// ---- Annual financial statements (Yahoo fundamentals time-series) ----
+// Four fiscal years of income statement, balance sheet and cash flow. No crumb needed.
+// Each figure keeps its period end and currency: some Indian companies (Infosys) report
+// here in USD, so absolute amounts must never be mixed with ₹ prices without checking.
+const ANNUAL_TYPES = {
+  revenue: 'annualTotalRevenue', operatingIncome: 'annualOperatingIncome', netIncome: 'annualNetIncome',
+  ebit: 'annualEBIT', ebitda: 'annualEBITDA', interestExpense: 'annualInterestExpense',
+  netInterestIncome: 'annualNetInterestIncome', dilutedEps: 'annualDilutedEPS',
+  operatingCashFlow: 'annualOperatingCashFlow', freeCashFlow: 'annualFreeCashFlow', capex: 'annualCapitalExpenditure',
+  totalDebt: 'annualTotalDebt', equity: 'annualStockholdersEquity', totalAssets: 'annualTotalAssets',
+  investedCapital: 'annualInvestedCapital', cash: 'annualCashAndCashEquivalents', receivables: 'annualAccountsReceivable',
+  currentAssets: 'annualCurrentAssets', currentLiabilities: 'annualCurrentLiabilities', shares: 'annualOrdinarySharesNumber',
+}
+export async function fetchAnnualStatements(symbol) {
+  return cachedDaily(`annual:${symbol}`, async () => {
+    const types = Object.values(ANNUAL_TYPES).join(',')
+    const now = Math.floor(Date.now() / 1000)
+    const d = await httpGet(q(`/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(symbol)}?type=${types}&period1=${now - 7 * 365 * 86400}&period2=${now}`))
+    const byYear = {}
+    let currency = null
+    for (const r of d?.timeseries?.result || []) {
+      const type = r?.meta?.type?.[0]
+      const key = Object.keys(ANNUAL_TYPES).find(k => ANNUAL_TYPES[k] === type)
+      if (!key) continue
+      for (const x of r[type] || []) {
+        if (!x?.reportedValue || x.reportedValue.raw == null) continue
+        const end = x.asOfDate
+        ;(byYear[end] ||= { end, fy: `FY${end.slice(0, 4)}` })[key] = Number(x.reportedValue.raw)
+        currency ||= x.currencyCode || null
+      }
+    }
+    const years = Object.values(byYear).sort((a, b) => a.end.localeCompare(b.end))
+    if (!years.length) throw new Error('no annual data')
+    return { years, currency, source: 'Yahoo Finance annual statements', fetchedAt: new Date().toISOString() }
+  })
+}
+
 // ---- Market pulse (index/FX ticker for the Portfolio page) ----
 const PULSE = [
   { key: 'nifty', symbol: '^NSEI', label: 'NIFTY 50' },
@@ -331,6 +368,21 @@ async function _fetchStockFundamentals(symbol) {
     recommendation: fd.recommendationKey || null, targetMean: f(fd.targetMeanPrice),
     targetMeanRaw: raw(fd.targetMeanPrice), targetHigh: raw(fd.targetHighPrice), targetLow: raw(fd.targetLowPrice),
     analystCount: raw(fd.numberOfAnalystOpinions),
+    // Raw numbers for the research engine (the strings above are for display). Ratios from
+    // Yahoo are fractions (0.18 = 18%) except debtToEquity, which Yahoo reports in percent.
+    raw: {
+      price: raw(fd.currentPrice) ?? raw(pr.regularMarketPrice),
+      pe: raw(sd.trailingPE), fwdPe: raw(sd.forwardPE), pb: raw(ks.priceToBook),
+      evEbitda: raw(ks.enterpriseToEbitda), eps: raw(ks.trailingEps), bookValue: raw(ks.bookValue),
+      profitMargin: raw(fd.profitMargins), operatingMargin: raw(fd.operatingMargins),
+      roe: raw(fd.returnOnEquity), roa: raw(fd.returnOnAssets),
+      revenueGrowth: raw(fd.revenueGrowth), earningsGrowth: raw(fd.earningsGrowth),
+      debtToEquity: raw(fd.debtToEquity), currentRatio: raw(fd.currentRatio),
+      beta: raw(sd.beta), divYield: raw(sd.dividendYield),
+      freeCashflow: raw(fd.freeCashflow), operatingCashflow: raw(fd.operatingCashflow),
+      sharesOut: raw(ks.sharesOutstanding), heldByInsiders: raw(ks.heldPercentInsiders),
+    },
+    currency: pr.currency || null, financialCurrency: fd.financialCurrency || null,
     // Current month's rating split (period "0m"); older months show how opinion moved.
     ratings: (r.recommendationTrend?.trend || []).map(t => ({
       period: t.period, strongBuy: t.strongBuy ?? 0, buy: t.buy ?? 0, hold: t.hold ?? 0,
@@ -354,26 +406,81 @@ async function _fetchStockFundamentals(symbol) {
 // Size-matching is the point: Ujjivan Small Finance Bank and HDFC Bank share the industry
 // label "Banks—Regional", but HDFC is ~89x larger. Callers pick the market-cap
 // neighbours (see pickPeers in stockAnalysis.js) rather than the industry giants.
-export async function fetchIndustryPeers(industry) {
-  if (!industry) return []
-  return cachedDaily(`peers:${industry}`, async () => {
-    // Yahoo's own endpoints disagree on punctuation: assetProfile says "Banks - Regional"
-    // while the screener only matches "Banks—Regional" (em dash) and returns 0 for the
-    // hyphenated form. Try each spelling until one comes back non-empty.
-    const variants = [...new Set([
+// Peer universe. Yahoo's industry screener now returns nothing to logged-out clients
+// (Oct 2026: zero rows for every query), so peers come from the exchange instead: NSE's
+// published NIFTY 500 constituent list carries each company's NSE industry. Market caps
+// for that industry's members come from one batched Yahoo quote call. The screener is
+// still tried first in case it recovers. Nothing here names a stock.
+//
+// `industry` is Yahoo's label (for the screener); `nseIndustry` is the fallback route
+// when the stock itself isn't in the NIFTY 500 (decided by the caller from its sector).
+export async function fetchIndustryPeers(industry, { symbol, nseIndustry } = {}) {
+  if (!industry && !nseIndustry) return []
+  return cachedDaily(`peers:${industry}:${symbol || ''}`, async () => {
+    const variants = industry ? [...new Set([
       industry,
       industry.replace(/\s+-\s+/g, '—'),   // " - " → em dash
       industry.replace(/—/g, ' - '),       // em dash → " - "
-    ])]
+    ])] : []
     for (const v of variants) {
       try {
         const rows = await _fetchIndustryPeers(v)
         if (rows.length) return rows
       } catch { /* try the next spelling */ }
     }
-    return []
+    // exchange route
+    const list = await fetchNseUniverse()
+    const base = String(symbol || '').replace(/\.(NS|BO)$/, '').toUpperCase()
+    const ind = list.find(r => r.code === base)?.industry || nseIndustry
+    if (!ind) return []
+    const members = list.filter(r => r.industry === ind).map(r => `${r.code}.NS`)
+    const quotes = await fetchQuotes(members)
+    return quotes.filter(x => x.marketCap).sort((a, b) => b.marketCap - a.marketCap)
+      .map(x => ({ ...x, nseIndustry: ind }))
   })
 }
+
+// NSE NIFTY 500 constituents: [{ code, name, industry }]. A small public CSV.
+export async function fetchNseUniverse() {
+  return cachedDaily('nse500', async () => {
+    const src = 'https://archives.nseindia.com/content/indices/ind_nifty500list.csv'
+    const url = Capacitor.isNativePlatform() ? src : '/nse-csv'
+    const res = await CapacitorHttp.get({ url, headers: { 'User-Agent': YUA }, connectTimeout: 12000, readTimeout: 12000 })
+    const text = typeof res.data === 'string' ? res.data : String(res.data || '')
+    const rows = text.trim().split(/\r?\n/).slice(1).map(line => {
+      // "Company Name,Industry,Symbol,Series,ISIN" — names may be quoted and contain commas
+      const cells = line.match(/("([^"]*)"|[^,]*)(,|$)/g)?.map(c => c.replace(/,$/, '').replace(/^"|"$/g, '').trim()) || []
+      return { name: cells[0], industry: cells[1], code: (cells[2] || '').toUpperCase() }
+    }).filter(r => r.code && r.industry)
+    if (rows.length < 100) throw new Error('NSE list unavailable')
+    return rows
+  })
+}
+
+// Batched Yahoo quotes (market cap, name, trailing P/E) — crumb-authenticated.
+export async function fetchQuotes(symbols) {
+  const out = []
+  for (let i = 0; i < symbols.length; i += 50) {
+    const chunk = symbols.slice(i, i + 50).join(',')
+    let d
+    if (Capacitor.isNativePlatform()) {
+      await ensureYahooAuth()
+      const res = await CapacitorHttp.get({
+        url: `${YQ}/v7/finance/quote?symbols=${encodeURIComponent(chunk)}&fields=marketCap,shortName,longName,trailingPE&crumb=${encodeURIComponent(_yCrumb)}`,
+        headers: { 'User-Agent': YUA, Cookie: _yCookie }, connectTimeout: 12000, readTimeout: 12000,
+      })
+      if (res.status === 401) { _yCookie = null; _yCrumb = null; throw new Error('crumb expired') }
+      d = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+    } else {
+      d = await httpGet(`/yahoo-quote?symbols=${encodeURIComponent(chunk)}`)
+    }
+    for (const qt of d?.quoteResponse?.result || []) {
+      out.push({ symbol: qt.symbol, name: qt.shortName || qt.longName || qt.symbol, marketCap: num(qt.marketCap) })
+    }
+  }
+  return out
+}
+
 async function _fetchIndustryPeers(industry) {
   const body = {
     size: 250, offset: 0,

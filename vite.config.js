@@ -24,6 +24,26 @@ function yahooDevProxy() {
           res.end(await r.text())
         } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }
       })
+      // Batched quotes (peer market caps) — cookie+crumb, GET.
+      server.middlewares.use('/yahoo-quote', async (req, res) => {
+        try {
+          const symbols = new URL(req.url, 'http://x').searchParams.get('symbols') || ''
+          const c = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': YUA } })
+          const cookie = (c.headers.get('set-cookie') || '').split(';')[0]
+          const crumb = (await (await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'User-Agent': YUA, cookie } })).text()).trim()
+          const r = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=marketCap,shortName,longName,trailingPE&crumb=${encodeURIComponent(crumb)}`, { headers: { 'User-Agent': YUA, cookie } })
+          res.setHeader('content-type', 'application/json')
+          res.end(await r.text())
+        } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: String(e) })) }
+      })
+      // NSE NIFTY 500 constituent list (peer universe by NSE industry).
+      server.middlewares.use('/nse-csv', async (req, res) => {
+        try {
+          const r = await fetch('https://archives.nseindia.com/content/indices/ind_nifty500list.csv', { headers: { 'User-Agent': YUA } })
+          res.setHeader('content-type', 'text/csv')
+          res.end(await r.text())
+        } catch (e) { res.statusCode = 502; res.end(String(e)) }
+      })
       // Stock screener (industry peers) — same cookie+crumb handshake, but a POST.
       server.middlewares.use('/yahoo-screener', async (req, res) => {
         try {
